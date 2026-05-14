@@ -671,6 +671,7 @@ class ConfirmScreen(Screen):
                 pyhanko_config=cfg.pyhanko_config,
                 stdin=f"{password}\n",
                 capture_output=True,
+                start_new_session=True,  # detaches /dev/tty so getpass reads stdin
             )
             results.append((f, out, proc.returncode, proc.stderr or ""))
         self.app.push_screen(SignResultScreen(results=results))

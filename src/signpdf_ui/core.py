@@ -178,12 +178,17 @@ def run_sign_command(
     *,
     stdin: Optional[str] = None,
     capture_output: bool = False,
+    start_new_session: bool = False,
 ) -> subprocess.CompletedProcess:
     """Run a build_sign_command() result with the correct working directory.
 
     pyhanko resolves relative paths inside the YAML (e.g. ``background:
     watermark.png``) against its current working directory, so we always run
     from the directory containing the pyhanko config.
+
+    Pass start_new_session=True when supplying a password via stdin: it calls
+    setsid() before exec so the child has no controlling terminal, which
+    causes Python's getpass to fall back from /dev/tty to stdin.
     """
 
     return subprocess.run(
@@ -192,6 +197,7 @@ def run_sign_command(
         input=stdin,
         text=stdin is not None,
         capture_output=capture_output,
+        start_new_session=start_new_session,
     )
 
 
