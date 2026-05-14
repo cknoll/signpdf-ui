@@ -2,7 +2,7 @@
 
 # signpdf-ui
 
-A textual TUI (and small CLI) that wraps [pyhanko](https://github.com/MatthiasValvekens/pyHanko) so you can sign PDFs on Linux without memorizing flags.
+An interactive terminal UI (and small CLI) that wraps [pyhanko](https://github.com/MatthiasValvekens/pyHanko) so you can sign PDFs on Linux without memorizing flags.
 
 ## Install
 
@@ -20,7 +20,7 @@ This copies the bundled configuration templates (`signpdf-ui.yml`, `pyhanko.yml`
 
 ## Usage
 
-### Interactive TUI
+### Interactive UI
 
 Run the bare command to launch the wizard:
 
@@ -45,7 +45,7 @@ When you choose **Geometry (page + bounding box)** mode, you can use Okular to d
    A temporary copy of the PDF opens in Okular — the original file is never touched.
 2. In Okular, select the **Rectangle annotation tool** (toolbar ▭ button, or *Insert → Rectangle*).
 3. Draw a rectangle over the desired signature area, then **save** with **Ctrl+S**.
-4. Back in the TUI, click **"Import rect from Okular file"**.  
+4. Back in the UI, click **"Import rect from Okular file"**.  
    The tool reads only the *newly added* rectangle (pre-existing rects in the original are ignored) and pre-fills the field spec as `1/X1,Y1,X2,Y2/X1`.
 5. Adjust the page number (first token) and field name (last token) if needed, then proceed.
 
@@ -60,7 +60,7 @@ signpdf-ui --detect-fields FILE.pdf
 signpdf-ui --extract-rects FILE.pdf
 ```
 
-For batch signing without the TUI, use `pyhanko sign addsig` directly — the "Show command" feature in the TUI prints the exact invocation if you want a copy-paste starting point.
+For batch signing without the UI, use `pyhanko sign addsig` directly — the "Show command" feature in the UI prints the exact invocation if you want a copy-paste starting point.
 
 ## Configuration
 

@@ -60,13 +60,21 @@ def _load_config_or_none():
         return None
 
 
+# Lateral focus navigation reused by every screen/modal with side-by-side buttons.
+# Added per-screen (not only on App) so it also works inside ModalScreen instances.
+_LR = (
+    Binding("left", "focus_previous", show=False),
+    Binding("right", "focus_next", show=False),
+)
+
+
 # ---------------------------------------------------------------------------
 # Main menu
 # ---------------------------------------------------------------------------
 
 
 class MainMenu(Screen):
-    BINDINGS = [Binding("q", "app.quit", "Quit")]
+    BINDINGS = [Binding("q", "app.quit", "Quit"), *_LR]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -130,7 +138,7 @@ class MainMenu(Screen):
 
 
 class MessageScreen(Screen):
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
 
     def __init__(self, *, title: str, text: str) -> None:
         super().__init__()
@@ -159,7 +167,7 @@ class MessageScreen(Screen):
 class SingleFileActionScreen(Screen):
     """Asks for one PDF, then runs either field detection or rect extraction."""
 
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
 
     def __init__(self, *, mode: str) -> None:
         super().__init__()
@@ -231,7 +239,7 @@ class WizardState:
 
 
 class SelectFilesScreen(Screen):
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -268,7 +276,7 @@ class SelectFilesScreen(Screen):
 
 
 class SelectModeScreen(Screen):
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
 
     def compose(self) -> ComposeResult:
         files: List[Path] = self.app.wizard.files  # type: ignore[attr-defined]
@@ -303,7 +311,7 @@ class SelectModeScreen(Screen):
 class PickFieldScreen(Screen):
     """Lists fields detected in the *first* selected file and lets the user pick one."""
 
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -348,7 +356,7 @@ class PickFieldScreen(Screen):
 class PickGeometryScreen(Screen):
     """Geometry mode: pick a page, pick or enter a bbox, give the field a name."""
 
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
 
     def __init__(self) -> None:
         super().__init__()
@@ -480,7 +488,7 @@ class PickGeometryScreen(Screen):
 
 
 class PickCertScreen(Screen):
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
 
     def compose(self) -> ComposeResult:
         cfg = _load_config_or_none()
@@ -519,7 +527,7 @@ class PickCertScreen(Screen):
 class ShowCommandModal(ModalScreen):
     """Modal that shows the pyhanko command(s) with a clipboard copy button."""
 
-    BINDINGS = [Binding("escape", "app.pop_screen", "Close")]
+    BINDINGS = [Binding("escape", "app.pop_screen", "Close"), *_LR]
 
     def __init__(self, commands: List[List[str]]) -> None:
         super().__init__()
@@ -550,14 +558,16 @@ class ShowCommandModal(ModalScreen):
 
 
 class PasswordModal(ModalScreen):
-    """Modal that prompts for the PKCS#12 password without suspending the TUI."""
+    """Modal that prompts for the PKCS#12 password without suspending the UI."""
+
+    BINDINGS = [*_LR]
 
     def compose(self) -> ComposeResult:
         yield Vertical(
             Static("[b]PKCS#12 password[/b]\n"),
             Input(password=True, placeholder="password", id="pw"),
             Horizontal(
-                Button("Sign", id="submit", variant="primary"),
+                Button("Sign  [↵ Enter]", id="submit", variant="primary"),
                 Button("Cancel", id="cancel"),
             ),
             Static("", id="status"),
@@ -590,7 +600,7 @@ class PasswordModal(ModalScreen):
 class ConfirmScreen(Screen):
     """Shows a compact summary and lets the user inspect the command or sign."""
 
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
 
     def compose(self) -> ComposeResult:
         wiz: WizardState = self.app.wizard  # type: ignore[attr-defined]
@@ -680,7 +690,7 @@ class ConfirmScreen(Screen):
 class SignResultScreen(Screen):
     """Shows per-file signing results with optional Okular open buttons."""
 
-    BINDINGS = [Binding("escape", "action_done", "Done")]
+    BINDINGS = [Binding("escape", "action_done", "Done"), *_LR]
 
     def __init__(self, results: List) -> None:
         super().__init__()
@@ -735,6 +745,7 @@ class HelpScreen(Screen):
     BINDINGS = [
         Binding("escape", "app.pop_screen", "Close"),
         Binding("f1", "app.pop_screen", "Close"),
+        *_LR,
     ]
 
     def compose(self) -> ComposeResult:

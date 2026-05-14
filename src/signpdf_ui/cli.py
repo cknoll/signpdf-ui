@@ -1,7 +1,7 @@
 """
 Command line entry point for signpdf-ui.
 
-By default it launches the Textual TUI. The non-interactive flags
+By default it launches the interactive signing UI. The non-interactive flags
 ``--detect-fields`` and ``--extract-rects`` mirror the legacy bash script for
 users who want quick one-shot operations or to call signpdf-ui from scripts.
 """
@@ -19,7 +19,7 @@ from .release import __version__
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="signpdf-ui",
-        description="TUI for signing PDFs with pyhanko.",
+        description="Interactive signing UI for PDFs (powered by pyhanko).",
     )
     parser.add_argument(
         "--version",
@@ -51,12 +51,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "file",
         nargs="?",
         metavar="FILE",
-        help="Open the TUI with FILE pre-loaded (skips the file-selection step).",
+        help="Open the signing UI with FILE pre-loaded (skips the file-selection step).",
     )
     parser.add_argument(
         "--multi",
         metavar="PATTERN",
-        help='Open the TUI with all PDFs matching PATTERN pre-loaded (e.g. "docs/*.pdf").',
+        help='Open the signing UI with all PDFs matching PATTERN pre-loaded (e.g. "docs/*.pdf").',
     )
     parser.add_argument(
         "--demo",
@@ -99,7 +99,7 @@ def _cmd_demo() -> int:
     print(f"       signpdf-ui --init\n")
     print(f"  2. Detect existing signature fields:")
     print(f"       signpdf-ui --detect-fields {demo_dir / 'demo-form-with-sign-fields.pdf'}\n")
-    print(f"  3. Open the TUI with a demo file pre-loaded:")
+    print(f"  3. Open the signing UI with a demo file pre-loaded:")
     print(f"       signpdf-ui {demo_dir / 'demo-form-with-sign-fields.pdf'}\n")
     print(f"  4. Or sign multiple files at once:")
     print(f'       signpdf-ui --multi "{demo_dir}/*.pdf"\n')
@@ -137,7 +137,7 @@ def main(argv=None) -> int:
             print(f"No PDF files match: {args.multi}", file=sys.stderr)
             return 1
 
-    # Default: launch the TUI. Imported lazily so the non-interactive paths
+    # Default: launch the signing UI. Imported lazily so the non-interactive paths
     # don't pay the Textual import cost.
     from .tui import run_tui
 
