@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import os
 import shlex
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import List, Optional
 
@@ -75,7 +77,7 @@ class MainMenu(Screen):
             Button("Extract rect coordinates", id="rects"),
             Button("Edit config (ui)", id="edit_ui"),
             Button("Edit config (pyhanko)", id="edit_pyhanko"),
-            Button("Quit", id="quit"),
+            Button("Quit (q)", id="quit"),
             id="menu",
         )
         yield Footer()
@@ -348,18 +350,30 @@ class PickGeometryScreen(Screen):
 
     BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._okular_temp: Optional[Path] = None  # temp copy opened in Okular
+        self._original_rects: List[str] = []  # rects present before Okular edit
+
     def compose(self) -> ComposeResult:
+        files: List[Path] = self.app.wizard.files  # type: ignore[attr-defined]
+        extract_label = "Extract rects from file" if len(files) == 1 else "Extract rects from first file"
         yield Header()
         yield Vertical(
             Static("[b]Step 3/4 — Geometry[/b]\n"),
             Static(
                 "Format: PAGE/X1,Y1,X2,Y2/NAME — e.g. `1/189,578,356,615/X1`.\n"
-                "You can also extract rects from the first file and pick one below.\n",
+                "Extract existing rects from the file, or open a copy in Okular\n"
+                "and draw a rectangle annotation to define the signature area.\n",
             ),
             Label("Field spec:"),
             Input(placeholder="1/189,578,356,615/X1", id="field"),
-            Button("Extract rects from first file", id="extract"),
+            Horizontal(
+                Button(extract_label, id="extract"),
+                Button("Open copy in Okular to draw rect", id="okular_open"),
+            ),
             ListView(id="rects"),
+            Button("Import rect from Okular file", id="okular_import", disabled=True),
             Horizontal(
                 Button("Use spec", id="use", variant="primary"),
                 Button("Back", id="back"),
@@ -386,10 +400,65 @@ class PickGeometryScreen(Screen):
             for rect in rects:
                 lv.append(ListItem(Label(rect)))
             self.query_one("#status", Static).update(
-                f"{len(rects)} rect(s) extracted from {first}. Pick one to prefill the spec."
+                f"{len(rects)} rect(s) found. Pick one to prefill the spec."
             )
         except Exception as exc:  # noqa: BLE001
             self.query_one("#status", Static).update(f"Error: {exc}")
+
+    @on(Button.Pressed, "#okular_open")
+    def _okular_open(self) -> None:
+        files: List[Path] = self.app.wizard.files  # type: ignore[attr-defined]
+        first = files[0]
+        # Remember which rects exist before the user adds anything.
+        try:
+            self._original_rects = core.extract_rects(first)
+        except Exception:
+            self._original_rects = []
+        # Create a disposable temp copy so the original file is never modified.
+        fd, tmp_str = tempfile.mkstemp(suffix=".pdf", prefix="signpdf-rect-")
+        os.close(fd)
+        self._okular_temp = Path(tmp_str)
+        shutil.copy2(first, self._okular_temp)
+        subprocess.Popen(
+            ["okular", str(self._okular_temp)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        self.query_one("#okular_import", Button).disabled = False
+        self.query_one("#status", Static).update(
+            f"Okular opened: {self._okular_temp.name}\n"
+            "Draw ONE rectangle annotation (toolbar ▭ or Insert > Rectangle),\n"
+            "save with Ctrl+S, then click 'Import rect from Okular file'."
+        )
+
+    @on(Button.Pressed, "#okular_import")
+    def _okular_import(self) -> None:
+        status: Static = self.query_one("#status", Static)
+        if self._okular_temp is None or not self._okular_temp.is_file():
+            status.update("Temp file not found. Use 'Open copy in Okular' first.")
+            return
+        try:
+            copy_rects = core.extract_rects(self._okular_temp)
+            new_rects = [r for r in copy_rects if r not in self._original_rects]
+        except Exception as exc:  # noqa: BLE001
+            status.update(f"Error reading temp file: {exc}")
+            return
+        if not new_rects:
+            status.update(
+                "No new rect found. Make sure you drew a rectangle annotation\n"
+                "and saved the file in Okular (Ctrl+S)."
+            )
+            return
+        if len(new_rects) > 1:
+            lv: ListView = self.query_one("#rects", ListView)
+            lv.clear()
+            for r in new_rects:
+                lv.append(ListItem(Label(r)))
+            status.update(f"{len(new_rects)} new rects found — please keep only one and try again.")
+            return
+        rect = new_rects[0]
+        self.query_one("#field", Input).value = f"1/{rect}/X1"
+        status.update(f"Imported: {rect}  (edit page number or field name above if needed)")
 
     @on(ListView.Selected, "#rects")
     def _rect_selected(self, event: ListView.Selected) -> None:
@@ -586,12 +655,13 @@ class HelpScreen(Screen):
         yield Vertical(
             Static("[b]Keyboard shortcuts[/b]\n"),
             Static(
-                "  Tab / Shift+Tab  — move between fields\n"
-                "  Up / Down        — same as Tab / Shift+Tab\n"
-                "  Enter / Space    — activate focused button\n"
-                "  Escape           — go back\n"
-                "  F1               — show this help\n"
-                "  q                — quit (from main menu)\n"
+                "  Tab / Shift+Tab        — move between fields\n"
+                "  Up / Down              — same as Tab / Shift+Tab\n"
+                "  Left / Right           — switch between side-by-side buttons\n"
+                "  Enter / Space          — activate focused button\n"
+                "  Escape                 — go back\n"
+                "  F1                     — show this help\n"
+                "  q                      — quit (from main menu)\n"
             ),
             Button("Close", id="close"),
         )
@@ -608,7 +678,8 @@ class HelpScreen(Screen):
 
 
 class SignPdfUiApp(App):
-    COMMANDS = frozenset()  # disable command palette (removes "^p palette" footer hint)
+    COMMANDS = frozenset()
+    ENABLE_COMMAND_PALETTE = False  # removes "^p palette" from the footer
 
     CSS = """
     Screen {
@@ -642,6 +713,8 @@ class SignPdfUiApp(App):
         Binding("ctrl+c", "app.quit", "Quit", show=False),
         Binding("up", "focus_previous", show=False),
         Binding("down", "focus_next", show=False),
+        Binding("left", "focus_previous", show=False),
+        Binding("right", "focus_next", show=False),
         Binding("f1", "show_help", "F1 Help"),
     ]
 

@@ -37,6 +37,20 @@ Main menu entries:
 
 Per the current security stance, you are prompted for the PKCS#12 password once per file (matches the legacy bash flow). This is suspended through to the underlying terminal so pyhanko's own prompt is used.
 
+### Defining the signature area visually with Okular
+
+When you choose **Geometry (page + bounding box)** mode, you can use Okular to draw the exact area where the signature stamp should appear instead of typing raw coordinates:
+
+1. In the geometry step, click **"Open copy in Okular to draw rect"**.  
+   A temporary copy of the PDF opens in Okular — the original file is never touched.
+2. In Okular, select the **Rectangle annotation tool** (toolbar ▭ button, or *Insert → Rectangle*).
+3. Draw a rectangle over the desired signature area, then **save** with **Ctrl+S**.
+4. Back in the TUI, click **"Import rect from Okular file"**.  
+   The tool reads only the *newly added* rectangle (pre-existing rects in the original are ignored) and pre-fills the field spec as `1/X1,Y1,X2,Y2/X1`.
+5. Adjust the page number (first token) and field name (last token) if needed, then proceed.
+
+> **Note:** Okular must be configured to embed annotations into the PDF file (the default when saving with Ctrl+S, as opposed to keeping a sidecar `.okular` file). The signature is applied to the *original* file; the temporary Okular copy is only used to capture the rectangle coordinates.
+
 ### Non-interactive CLI
 
 The two utility flags from the legacy bash script are preserved for scripting:
