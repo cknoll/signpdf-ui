@@ -63,8 +63,8 @@ def _load_config_or_none():
 # Lateral focus navigation reused by every screen/modal with side-by-side buttons.
 # Added per-screen (not only on App) so it also works inside ModalScreen instances.
 _LR = (
-    Binding("left", "focus_previous", show=False),
-    Binding("right", "focus_next", show=False),
+    Binding("left", "app.focus_previous", show=False),
+    Binding("right", "app.focus_next", show=False),
 )
 
 
@@ -467,13 +467,14 @@ class PickGeometryScreen(Screen):
         rect = new_rects[0]
         self.query_one("#field", Input).value = f"1/{rect}/X1"
         status.update(f"Imported: {rect}  (edit page number or field name above if needed)")
+        self.query_one("#use", Button).focus()
 
     @on(ListView.Selected, "#rects")
     def _rect_selected(self, event: ListView.Selected) -> None:
         label = event.item.query_one(Label)
         rect = str(label.renderable)
-        # Default to page 1 and field name X1; user can edit before confirming.
         self.query_one("#field", Input).value = f"1/{rect}/X1"
+        self.query_one("#use", Button).focus()
 
     @on(Button.Pressed, "#use")
     def _use(self) -> None:
@@ -499,7 +500,7 @@ class PickCertScreen(Screen):
             Label("PKCS#12 certificate file (.p12):"),
             Input(value=default, placeholder="/path/to/cert.p12", id="cert"),
             Horizontal(
-                Button("Next", id="next", variant="primary"),
+                Button("Next  [↵ Enter]", id="next", variant="primary"),
                 Button("Back", id="back"),
             ),
             Static("", id="status"),
@@ -509,6 +510,10 @@ class PickCertScreen(Screen):
     @on(Button.Pressed, "#back")
     def _back(self) -> None:
         self.app.pop_screen()
+
+    @on(Input.Submitted, "#cert")
+    def _cert_submitted(self, _: Input.Submitted) -> None:
+        self._next()
 
     @on(Button.Pressed, "#next")
     def _next(self) -> None:
@@ -549,7 +554,22 @@ class ShowCommandModal(ModalScreen):
     @on(Button.Pressed, "#copy")
     def _copy(self) -> None:
         text = "\n".join(shlex.join(cmd) for cmd in self._commands)
-        self.app.copy_to_clipboard(text)
+        # Try native clipboard tools before falling back to OSC 52 (not
+        # supported by all terminals, e.g. Konsole on KDE).
+        for args in (
+            ["wl-copy"],                           # Wayland
+            ["xclip", "-selection", "clipboard"],  # X11
+            ["xsel", "--clipboard", "--input"],    # X11 alternative
+        ):
+            try:
+                subprocess.run(args, input=text, text=True, check=True,
+                               capture_output=True, timeout=2)
+                self.query_one("#status", Static).update("Copied to clipboard.")
+                return
+            except (FileNotFoundError, subprocess.CalledProcessError,
+                    subprocess.TimeoutExpired):
+                continue
+        self.app.copy_to_clipboard(text)  # OSC 52 fallback
         self.query_one("#status", Static).update("Copied to clipboard.")
 
     @on(Button.Pressed, "#close")
@@ -625,6 +645,9 @@ class ConfirmScreen(Screen):
             Static("", id="status"),
         )
         yield Footer()
+
+    def on_mount(self) -> None:
+        self.query_one("#sign", Button).focus()
 
     @on(Button.Pressed, "#back")
     def _back(self) -> None:
