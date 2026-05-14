@@ -1,8 +1,11 @@
 stamp-styles:
     my-signature:
         type: text
+        # TODO: Change this, see pyhanko docs for syntax
         stamp-text: "Firstname Lastname\n%(ts)s"
+        # TODO: Adapt the watermark image: E.g. you can uncomment the "watermark-personalized.png"-line below and edit the image according do your needs.
         background: watermark.png
+        # background: watermark-personalized.png
         background-opacity: 1
         background-layout:
           x-align: left
