@@ -1,0 +1,6 @@
+textual>=0.50
+pyyaml
+platformdirs
+pyhanko
+ipydex
+pytest

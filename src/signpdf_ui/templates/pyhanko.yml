@@ -1,0 +1,16 @@
+stamp-styles:
+    my-signature:
+        type: text
+        stamp-text: "Firstname Lastname\n%(ts)s"
+        background: watermark.png
+        background-opacity: 1
+        background-layout:
+          x-align: left
+          margins:
+            left: 1
+            top: 1
+            bottom: 1
+        inner-content-layout:
+          x-align: right
+          margins:
+            right: 1

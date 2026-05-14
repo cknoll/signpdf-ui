@@ -1,0 +1,17 @@
+# signpdf-ui configuration
+# This file is created by `signpdf-ui --init`. Edit to suit your needs.
+
+# Default certificate path (optional). Tilde and env vars are expanded.
+# default_cert: ~/.config/signpdf-ui/my_cert.p12
+default_cert: null
+
+# Path to pyhanko style config file.
+# If a relative path is given, it is resolved against this file's directory.
+pyhanko_config: pyhanko.yml
+
+# Stamp style name (must exist in pyhanko_config).
+style_name: my-signature
+
+# Editor used by the "Edit config" buttons. If null, $VISUAL or $EDITOR is used,
+# falling back to `xdg-open`.
+editor: null

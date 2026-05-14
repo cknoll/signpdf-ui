@@ -1,0 +1,603 @@
+"""
+Textual TUI for signpdf-ui.
+
+The app is a small wizard: pick file(s) -> pick mode -> pick field/rect
+-> pick certificate -> confirm (with "show command" toggle) -> per-file run
+with password prompt. Two menu entries open the config files in $EDITOR.
+"""
+
+from __future__ import annotations
+
+import os
+import shlex
+import subprocess
+from pathlib import Path
+from typing import List, Optional
+
+from textual import on
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.screen import Screen
+from textual.widgets import (
+    Button,
+    Footer,
+    Header,
+    Input,
+    Label,
+    ListItem,
+    ListView,
+    RichLog,
+    Static,
+)
+
+from . import core, paths
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _open_in_editor(file_path: Path, editor_override: Optional[str] = None) -> None:
+    """Suspend the TUI long enough to run $EDITOR (or fallback) on file_path."""
+
+    editor = (
+        editor_override
+        or os.environ.get("VISUAL")
+        or os.environ.get("EDITOR")
+        or "xdg-open"
+    )
+    subprocess.run([*shlex.split(editor), str(file_path)])
+
+
+def _load_config_or_none():
+    try:
+        return core.load_ui_config()
+    except FileNotFoundError:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Main menu
+# ---------------------------------------------------------------------------
+
+
+class MainMenu(Screen):
+    BINDINGS = [Binding("q", "app.quit", "Quit")]
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=False)
+        yield Vertical(
+            Static("signpdf-ui — sign PDFs through pyhanko\n", id="title"),
+            Button("Sign PDF(s)", id="sign", variant="primary"),
+            Button("Detect signature fields", id="detect"),
+            Button("Extract rect coordinates", id="rects"),
+            Button("Edit config (ui)", id="edit_ui"),
+            Button("Edit config (pyhanko)", id="edit_pyhanko"),
+            Button("Quit", id="quit"),
+            id="menu",
+        )
+        yield Footer()
+
+    @on(Button.Pressed, "#sign")
+    def _go_sign(self) -> None:
+        self.app.push_screen(SelectFilesScreen())
+
+    @on(Button.Pressed, "#detect")
+    def _go_detect(self) -> None:
+        self.app.push_screen(SingleFileActionScreen(mode="detect"))
+
+    @on(Button.Pressed, "#rects")
+    def _go_rects(self) -> None:
+        self.app.push_screen(SingleFileActionScreen(mode="rects"))
+
+    @on(Button.Pressed, "#edit_ui")
+    def _edit_ui(self) -> None:
+        self._edit(paths.ui_config_path())
+
+    @on(Button.Pressed, "#edit_pyhanko")
+    def _edit_pyhanko(self) -> None:
+        self._edit(paths.pyhanko_config_path())
+
+    def _edit(self, path: Path) -> None:
+        if not path.exists():
+            self.app.push_screen(
+                MessageScreen(
+                    title="Config missing",
+                    text=(
+                        f"{path} does not exist yet.\n"
+                        "Run `signpdf-ui --init` once to create the default config files."
+                    ),
+                )
+            )
+            return
+        cfg = _load_config_or_none()
+        editor_override = cfg.editor if cfg else None
+        with self.app.suspend():
+            _open_in_editor(path, editor_override=editor_override)
+
+    @on(Button.Pressed, "#quit")
+    def _quit(self) -> None:
+        self.app.exit()
+
+
+# ---------------------------------------------------------------------------
+# Generic message / confirm screen
+# ---------------------------------------------------------------------------
+
+
+class MessageScreen(Screen):
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+
+    def __init__(self, *, title: str, text: str) -> None:
+        super().__init__()
+        self._title = title
+        self._text = text
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Vertical(
+            Static(f"[b]{self._title}[/b]\n"),
+            Static(self._text),
+            Button("Back", id="back"),
+        )
+        yield Footer()
+
+    @on(Button.Pressed, "#back")
+    def _back(self) -> None:
+        self.app.pop_screen()
+
+
+# ---------------------------------------------------------------------------
+# "Single file action" — detect fields / extract rects
+# ---------------------------------------------------------------------------
+
+
+class SingleFileActionScreen(Screen):
+    """Asks for one PDF, then runs either field detection or rect extraction."""
+
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+
+    def __init__(self, *, mode: str) -> None:
+        super().__init__()
+        assert mode in ("detect", "rects")
+        self._mode = mode
+
+    def compose(self) -> ComposeResult:
+        action_label = "Detect signature fields" if self._mode == "detect" else "Extract rect coordinates"
+        yield Header()
+        yield Vertical(
+            Static(f"[b]{action_label}[/b]\n"),
+            Label("PDF file:"),
+            Input(placeholder="path/to/file.pdf", id="path"),
+            Horizontal(
+                Button("Run", id="run", variant="primary"),
+                Button("Back", id="back"),
+            ),
+            RichLog(id="output", highlight=False, markup=False),
+        )
+        yield Footer()
+
+    @on(Button.Pressed, "#back")
+    def _back(self) -> None:
+        self.app.pop_screen()
+
+    @on(Button.Pressed, "#run")
+    def _run(self) -> None:
+        log: RichLog = self.query_one("#output", RichLog)
+        log.clear()
+        path_value = self.query_one("#path", Input).value.strip()
+        if not path_value:
+            log.write("No file given.")
+            return
+        path = Path(path_value).expanduser()
+        if not path.is_file():
+            log.write(f"Not a file: {path}")
+            return
+        try:
+            if self._mode == "detect":
+                results = core.list_fields(path)
+                if not results:
+                    log.write("(no signature fields found)")
+                for name in results:
+                    log.write(name)
+            else:
+                results = core.extract_rects(path)
+                if not results:
+                    log.write("(no rects found)")
+                for rect in results:
+                    log.write(rect)
+        except subprocess.CalledProcessError as exc:
+            log.write(f"pyhanko failed (exit {exc.returncode}):")
+            log.write(exc.stderr or "(no stderr)")
+        except Exception as exc:  # noqa: BLE001 — surface anything to the user
+            log.write(f"Error: {exc}")
+
+
+# ---------------------------------------------------------------------------
+# Signing wizard — shared state on the App
+# ---------------------------------------------------------------------------
+
+
+class WizardState:
+    def __init__(self) -> None:
+        self.files: List[Path] = []
+        self.mode: str = ""  # "field" or "geometry"
+        self.field: str = ""  # final --field argument
+        self.cert: Optional[Path] = None
+
+
+class SelectFilesScreen(Screen):
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Vertical(
+            Static("[b]Step 1/4 — Select PDF(s)[/b]\n"),
+            Label("Glob pattern or path (e.g. `demo-*.pdf` or `./form.pdf`):"),
+            Input(placeholder="*.pdf", id="pattern"),
+            Horizontal(
+                Button("Next", id="next", variant="primary"),
+                Button("Back", id="back"),
+            ),
+            Static("", id="status"),
+        )
+        yield Footer()
+
+    @on(Button.Pressed, "#back")
+    def _back(self) -> None:
+        self.app.pop_screen()
+
+    @on(Button.Pressed, "#next")
+    def _next(self) -> None:
+        pattern = self.query_one("#pattern", Input).value.strip()
+        status: Static = self.query_one("#status", Static)
+        if not pattern:
+            status.update("Please enter a path or pattern.")
+            return
+        files = core.expand_pdf_patterns([pattern])
+        if not files:
+            status.update(f"No PDF files match: {pattern}")
+            return
+        self.app.wizard.files = files  # type: ignore[attr-defined]
+        self.app.push_screen(SelectModeScreen())
+
+
+class SelectModeScreen(Screen):
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+
+    def compose(self) -> ComposeResult:
+        files: List[Path] = self.app.wizard.files  # type: ignore[attr-defined]
+        preview = "\n".join(f"  • {f}" for f in files[:10])
+        if len(files) > 10:
+            preview += f"\n  … and {len(files) - 10} more"
+        yield Header()
+        yield Vertical(
+            Static("[b]Step 2/4 — Choose signing mode[/b]\n"),
+            Static(f"Files selected ({len(files)}):\n{preview}\n"),
+            Button("Existing signature field (form)", id="mode_field", variant="primary"),
+            Button("Geometry (page + bounding box)", id="mode_geom"),
+            Button("Back", id="back"),
+        )
+        yield Footer()
+
+    @on(Button.Pressed, "#back")
+    def _back(self) -> None:
+        self.app.pop_screen()
+
+    @on(Button.Pressed, "#mode_field")
+    def _field(self) -> None:
+        self.app.wizard.mode = "field"  # type: ignore[attr-defined]
+        self.app.push_screen(PickFieldScreen())
+
+    @on(Button.Pressed, "#mode_geom")
+    def _geom(self) -> None:
+        self.app.wizard.mode = "geometry"  # type: ignore[attr-defined]
+        self.app.push_screen(PickGeometryScreen())
+
+
+class PickFieldScreen(Screen):
+    """Lists fields detected in the *first* selected file and lets the user pick one."""
+
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Vertical(
+            Static("[b]Step 3/4 — Pick a signature field[/b]\n"),
+            Static("", id="hint"),
+            ListView(id="fields"),
+            Horizontal(
+                Button("Use selected", id="use", variant="primary"),
+                Button("Back", id="back"),
+            ),
+        )
+        yield Footer()
+
+    def on_mount(self) -> None:
+        files: List[Path] = self.app.wizard.files  # type: ignore[attr-defined]
+        first = files[0]
+        hint: Static = self.query_one("#hint", Static)
+        hint.update(f"Fields detected in: {first}")
+        lv: ListView = self.query_one("#fields", ListView)
+        try:
+            for name in core.list_fields(first):
+                lv.append(ListItem(Label(name)))
+        except Exception as exc:  # noqa: BLE001
+            hint.update(f"Could not list fields in {first}: {exc}")
+
+    @on(Button.Pressed, "#back")
+    def _back(self) -> None:
+        self.app.pop_screen()
+
+    @on(Button.Pressed, "#use")
+    def _use(self) -> None:
+        lv: ListView = self.query_one("#fields", ListView)
+        item = lv.highlighted_child
+        if item is None:
+            return
+        label = item.query_one(Label)
+        self.app.wizard.field = str(label.renderable)  # type: ignore[attr-defined]
+        self.app.push_screen(PickCertScreen())
+
+
+class PickGeometryScreen(Screen):
+    """Geometry mode: pick a page, pick or enter a bbox, give the field a name."""
+
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Vertical(
+            Static("[b]Step 3/4 — Geometry[/b]\n"),
+            Static(
+                "Format: PAGE/X1,Y1,X2,Y2/NAME — e.g. `1/189,578,356,615/X1`.\n"
+                "You can also extract rects from the first file and pick one below.\n",
+            ),
+            Label("Field spec:"),
+            Input(placeholder="1/189,578,356,615/X1", id="field"),
+            Button("Extract rects from first file", id="extract"),
+            ListView(id="rects"),
+            Horizontal(
+                Button("Use spec", id="use", variant="primary"),
+                Button("Back", id="back"),
+            ),
+            Static("", id="status"),
+        )
+        yield Footer()
+
+    @on(Button.Pressed, "#back")
+    def _back(self) -> None:
+        self.app.pop_screen()
+
+    @on(Button.Pressed, "#extract")
+    def _extract(self) -> None:
+        files: List[Path] = self.app.wizard.files  # type: ignore[attr-defined]
+        first = files[0]
+        lv: ListView = self.query_one("#rects", ListView)
+        lv.clear()
+        try:
+            rects = core.extract_rects(first)
+            if not rects:
+                self.query_one("#status", Static).update(f"No rects found in {first}.")
+                return
+            for rect in rects:
+                lv.append(ListItem(Label(rect)))
+            self.query_one("#status", Static).update(
+                f"{len(rects)} rect(s) extracted from {first}. Pick one to prefill the spec."
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.query_one("#status", Static).update(f"Error: {exc}")
+
+    @on(ListView.Selected, "#rects")
+    def _rect_selected(self, event: ListView.Selected) -> None:
+        label = event.item.query_one(Label)
+        rect = str(label.renderable)
+        # Default to page 1 and field name X1; user can edit before confirming.
+        self.query_one("#field", Input).value = f"1/{rect}/X1"
+
+    @on(Button.Pressed, "#use")
+    def _use(self) -> None:
+        spec = self.query_one("#field", Input).value.strip()
+        if spec.count("/") != 2:
+            self.query_one("#status", Static).update(
+                "Spec must be PAGE/X1,Y1,X2,Y2/NAME (two slashes)."
+            )
+            return
+        self.app.wizard.field = spec  # type: ignore[attr-defined]
+        self.app.push_screen(PickCertScreen())
+
+
+class PickCertScreen(Screen):
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+
+    def compose(self) -> ComposeResult:
+        cfg = _load_config_or_none()
+        default = str(cfg.default_cert) if cfg and cfg.default_cert else ""
+        yield Header()
+        yield Vertical(
+            Static("[b]Step 4/4 — Certificate[/b]\n"),
+            Label("PKCS#12 certificate file (.p12):"),
+            Input(value=default, placeholder="/path/to/cert.p12", id="cert"),
+            Horizontal(
+                Button("Next", id="next", variant="primary"),
+                Button("Back", id="back"),
+            ),
+            Static("", id="status"),
+        )
+        yield Footer()
+
+    @on(Button.Pressed, "#back")
+    def _back(self) -> None:
+        self.app.pop_screen()
+
+    @on(Button.Pressed, "#next")
+    def _next(self) -> None:
+        value = self.query_one("#cert", Input).value.strip()
+        if not value:
+            self.query_one("#status", Static).update("Certificate path required.")
+            return
+        path = Path(value).expanduser()
+        if not path.is_file():
+            self.query_one("#status", Static).update(f"Not a file: {path}")
+            return
+        self.app.wizard.cert = path  # type: ignore[attr-defined]
+        self.app.push_screen(ConfirmScreen())
+
+
+class ConfirmScreen(Screen):
+    """Shows what's about to happen and lets the user reveal the exact command."""
+
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
+
+    def compose(self) -> ComposeResult:
+        wiz: WizardState = self.app.wizard  # type: ignore[attr-defined]
+        files_preview = "\n".join(f"  • {f} → {core.output_path_for(f).name}" for f in wiz.files[:10])
+        if len(wiz.files) > 10:
+            files_preview += f"\n  … and {len(wiz.files) - 10} more"
+        yield Header()
+        yield Vertical(
+            Static("[b]Confirm[/b]\n"),
+            Static(
+                f"Mode:        {wiz.mode}\n"
+                f"Field spec:  {wiz.field}\n"
+                f"Certificate: {wiz.cert}\n"
+                f"Files:\n{files_preview}\n"
+            ),
+            Horizontal(
+                Button("Show command", id="show"),
+                Button("Sign", id="sign", variant="primary"),
+                Button("Back", id="back"),
+            ),
+            VerticalScroll(RichLog(id="cmd", markup=False, highlight=False)),
+        )
+        yield Footer()
+
+    @on(Button.Pressed, "#back")
+    def _back(self) -> None:
+        self.app.pop_screen()
+
+    @on(Button.Pressed, "#show")
+    def _show(self) -> None:
+        cfg = _load_config_or_none()
+        if cfg is None:
+            self.query_one("#cmd", RichLog).write(
+                "UI config not found. Run `signpdf-ui --init` first."
+            )
+            return
+        wiz: WizardState = self.app.wizard  # type: ignore[attr-defined]
+        log: RichLog = self.query_one("#cmd", RichLog)
+        log.clear()
+        for f in wiz.files:
+            cmd = core.build_sign_command(
+                input_file=f,
+                output_file=core.output_path_for(f),
+                field=wiz.field,
+                cert_path=wiz.cert,
+                pyhanko_config=cfg.pyhanko_config,
+                style_name=cfg.style_name,
+            )
+            log.write(shlex.join(cmd))
+
+    @on(Button.Pressed, "#sign")
+    def _sign(self) -> None:
+        self.app.push_screen(RunScreen())
+
+
+class RunScreen(Screen):
+    """Runs the signing commands one-by-one, prompting for a password per file."""
+
+    BINDINGS = [Binding("escape", "app.pop_screen", "Back to menu")]
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Vertical(
+            Static("[b]Signing[/b]\n"),
+            RichLog(id="log", markup=False, highlight=False),
+            Horizontal(
+                Button("Run all (prompts password per file)", id="run", variant="primary"),
+                Button("Back to menu", id="back"),
+            ),
+        )
+        yield Footer()
+
+    @on(Button.Pressed, "#back")
+    def _back(self) -> None:
+        # Pop back through wizard screens to the main menu.
+        while len(self.app.screen_stack) > 1:
+            self.app.pop_screen()
+
+    @on(Button.Pressed, "#run")
+    def _run(self) -> None:
+        cfg = _load_config_or_none()
+        log: RichLog = self.query_one("#log", RichLog)
+        if cfg is None:
+            log.write("UI config not found. Run `signpdf-ui --init` first.")
+            return
+        wiz: WizardState = self.app.wizard  # type: ignore[attr-defined]
+        # Suspend the TUI so pyhanko can prompt for the password on the real
+        # terminal. This matches the legacy per-file-prompt behavior.
+        with self.app.suspend():
+            for f in wiz.files:
+                out = core.output_path_for(f)
+                cmd = core.build_sign_command(
+                    input_file=f,
+                    output_file=out,
+                    field=wiz.field,
+                    cert_path=wiz.cert,
+                    pyhanko_config=cfg.pyhanko_config,
+                    style_name=cfg.style_name,
+                )
+                print(f"\n>>> Signing {f} -> {out}")
+                print(f"    {shlex.join(cmd)}")
+                rc = core.run_sign_command(cmd, pyhanko_config=cfg.pyhanko_config).returncode
+                if rc != 0:
+                    print(f"    pyhanko exited with code {rc}")
+            input("\nDone. Press Enter to return to the TUI...")
+
+
+# ---------------------------------------------------------------------------
+# App
+# ---------------------------------------------------------------------------
+
+
+class SignPdfUiApp(App):
+    CSS = """
+    Screen {
+        align: center middle;
+    }
+    Vertical, VerticalScroll {
+        width: 80%;
+        max-width: 100;
+        padding: 1 2;
+    }
+    Button {
+        margin: 0 1;
+    }
+    Input {
+        margin-bottom: 1;
+    }
+    ListView {
+        height: 10;
+        border: solid $primary;
+    }
+    RichLog {
+        height: 12;
+        border: solid $accent;
+    }
+    """
+
+    BINDINGS = [Binding("ctrl+c", "app.quit", "Quit", show=False)]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.wizard = WizardState()
+
+    def on_mount(self) -> None:
+        self.push_screen(MainMenu())
+
+
+def run_tui() -> int:
+    SignPdfUiApp().run()
+    return 0
