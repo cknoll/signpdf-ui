@@ -1,2 +1,3 @@
 include requirements.txt
 recursive-include src/signpdf_ui/templates *
+recursive-include src/signpdf_ui/fixtures *

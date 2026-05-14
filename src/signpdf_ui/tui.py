@@ -590,14 +590,18 @@ class SignPdfUiApp(App):
 
     BINDINGS = [Binding("ctrl+c", "app.quit", "Quit", show=False)]
 
-    def __init__(self) -> None:
+    def __init__(self, initial_files: Optional[List[Path]] = None) -> None:
         super().__init__()
         self.wizard = WizardState()
+        self._initial_files = initial_files or []
 
     def on_mount(self) -> None:
         self.push_screen(MainMenu())
+        if self._initial_files:
+            self.wizard.files = self._initial_files
+            self.push_screen(SelectModeScreen())
 
 
-def run_tui() -> int:
-    SignPdfUiApp().run()
+def run_tui(initial_files: Optional[List[Path]] = None) -> int:
+    SignPdfUiApp(initial_files=initial_files).run()
     return 0

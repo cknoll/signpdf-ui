@@ -16,6 +16,13 @@ WATERMARK_FILENAME = "watermark.png"
 
 TEMPLATE_FILENAMES = (UI_CONFIG_FILENAME, PYHANKO_CONFIG_FILENAME, WATERMARK_FILENAME)
 
+FIXTURE_PDF_FILENAMES = (
+    "demo-form-raw.pdf",
+    "demo-form-raw-with-rects.pdf",
+    "demo-form-with-sign-fields.pdf",
+)
+FIXTURE_P12_FILENAME = "test_identity.p12"
+
 
 def user_config_dir() -> Path:
     return Path(platformdirs.user_config_dir(APP_NAME))
@@ -35,3 +42,11 @@ def templates_dir() -> Path:
 
 def template_path(filename: str) -> Path:
     return templates_dir() / filename
+
+
+def fixtures_dir() -> Path:
+    return Path(__file__).parent / "fixtures"
+
+
+def fixture_path(filename: str) -> Path:
+    return fixtures_dir() / filename

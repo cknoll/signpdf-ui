@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Optional
@@ -101,6 +102,13 @@ def init_config(force: bool = False, target_dir: Optional[Path] = None) -> InitR
             continue
         shutil.copy2(src, dst)
         written.append(dst)
+
+    # Substitute the demo p12 sentinel in the written config file.
+    config_dst = target_dir / paths.UI_CONFIG_FILENAME
+    if config_dst in written:
+        p12_path = paths.fixture_path(paths.FIXTURE_P12_FILENAME)
+        text = config_dst.read_text(encoding="utf-8")
+        config_dst.write_text(text.replace("__DEMO_P12_PATH__", str(p12_path)), encoding="utf-8")
 
     return InitResult(written=written, skipped=skipped, target_dir=target_dir)
 
@@ -301,6 +309,15 @@ def expand_pdf_patterns(patterns: Iterable[str]) -> List[Path]:
             seen.add(key)
             results.append(c)
     return results
+
+
+def cmd_demo() -> Path:
+    """Copy bundled demo PDFs to a fresh /tmp/pdfsign-ui-demo-<timestamp>/ directory."""
+    demo_dir = Path(f"/tmp/pdfsign-ui-demo-{int(time.time())}")
+    demo_dir.mkdir()
+    for filename in paths.FIXTURE_PDF_FILENAMES:
+        shutil.copy2(paths.fixture_path(filename), demo_dir / filename)
+    return demo_dir
 
 
 def version() -> str:

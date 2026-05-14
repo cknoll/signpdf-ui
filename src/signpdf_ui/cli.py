@@ -12,7 +12,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import core
+from . import core, paths
 from .release import __version__
 
 
@@ -47,6 +47,22 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         help="Print rect bounding boxes found in FILE (non-interactive).",
     )
+    parser.add_argument(
+        "file",
+        nargs="?",
+        metavar="FILE",
+        help="Open the TUI with FILE pre-loaded (skips the file-selection step).",
+    )
+    parser.add_argument(
+        "--multi",
+        metavar="PATTERN",
+        help='Open the TUI with all PDFs matching PATTERN pre-loaded (e.g. "docs/*.pdf").',
+    )
+    parser.add_argument(
+        "--demo",
+        action="store_true",
+        help="Copy bundled demo PDFs to /tmp/pdfsign-ui-demo-<timestamp>/ and print usage instructions.",
+    )
     return parser
 
 
@@ -73,6 +89,25 @@ def _cmd_extract_rects(filename: str) -> int:
     return 0
 
 
+def _cmd_demo() -> int:
+    demo_dir = core.cmd_demo()
+    print(f"Demo files copied to {demo_dir}/\n")
+    for name in paths.FIXTURE_PDF_FILENAMES:
+        print(f"  {demo_dir / name}")
+    print(f"\nTo try signpdf-ui:\n")
+    print(f"  1. Initialize config (once, if not done yet):")
+    print(f"       signpdf-ui --init\n")
+    print(f"  2. Detect existing signature fields:")
+    print(f"       signpdf-ui --detect-fields {demo_dir / 'demo-form-with-sign-fields.pdf'}\n")
+    print(f"  3. Open the TUI with a demo file pre-loaded:")
+    print(f"       signpdf-ui {demo_dir / 'demo-form-with-sign-fields.pdf'}\n")
+    print(f"  4. Or sign multiple files at once:")
+    print(f'       signpdf-ui --multi "{demo_dir}/*.pdf"\n')
+    print(f"The bundled demo certificate is used by default after --init.")
+    print(f"Replace default_cert in ~/.config/signpdf-ui/signpdf-ui.yml with your own .p12.")
+    return 0
+
+
 def main(argv=None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
@@ -86,11 +121,27 @@ def main(argv=None) -> int:
     if args.extract_rects:
         return _cmd_extract_rects(args.extract_rects)
 
+    if args.demo:
+        return _cmd_demo()
+
+    # Resolve initial files from positional FILE or --multi PATTERN.
+    initial_files = []
+    if args.file:
+        initial_files = core.expand_pdf_patterns([args.file])
+        if not initial_files:
+            print(f"No PDF file found: {args.file}", file=sys.stderr)
+            return 1
+    elif args.multi:
+        initial_files = core.expand_pdf_patterns([args.multi])
+        if not initial_files:
+            print(f"No PDF files match: {args.multi}", file=sys.stderr)
+            return 1
+
     # Default: launch the TUI. Imported lazily so the non-interactive paths
     # don't pay the Textual import cost.
     from .tui import run_tui
 
-    return run_tui()
+    return run_tui(initial_files=initial_files or None)
 
 
 if __name__ == "__main__":

@@ -2,8 +2,9 @@
 # This file is created by `signpdf-ui --init`. Edit to suit your needs.
 
 # Default certificate path (optional). Tilde and env vars are expanded.
-# default_cert: ~/.config/signpdf-ui/my_cert.p12
-default_cert: null
+# CHANGE THIS to your own .p12 certificate before signing real documents.
+# The line below uses the bundled demo certificate (safe for trying out the tool).
+default_cert: __DEMO_P12_PATH__
 
 # Path to pyhanko style config file.
 # If a relative path is given, it is resolved against this file's directory.
