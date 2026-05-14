@@ -235,6 +235,7 @@ class SelectFilesScreen(Screen):
         yield Header()
         yield Vertical(
             Static("[b]Step 1/4 — Select PDF(s)[/b]\n"),
+            Static(f"Working directory: {Path.cwd()}\n"),
             Label("Glob pattern or path (e.g. `demo-*.pdf` or `./form.pdf`):"),
             Input(placeholder="*.pdf", id="pattern"),
             Horizontal(
@@ -539,22 +540,66 @@ class RunScreen(Screen):
         # Suspend the TUI so pyhanko can prompt for the password on the real
         # terminal. This matches the legacy per-file-prompt behavior.
         with self.app.suspend():
-            for f in wiz.files:
-                out = core.output_path_for(f)
-                cmd = core.build_sign_command(
-                    input_file=f,
-                    output_file=out,
-                    field=wiz.field,
-                    cert_path=wiz.cert,
-                    pyhanko_config=cfg.pyhanko_config,
-                    style_name=cfg.style_name,
-                )
-                print(f"\n>>> Signing {f} -> {out}")
-                print(f"    {shlex.join(cmd)}")
-                rc = core.run_sign_command(cmd, pyhanko_config=cfg.pyhanko_config).returncode
-                if rc != 0:
-                    print(f"    pyhanko exited with code {rc}")
-            input("\nDone. Press Enter to return to the TUI...")
+            try:
+                for f in wiz.files:
+                    out = core.output_path_for(f)
+                    cmd = core.build_sign_command(
+                        input_file=f,
+                        output_file=out,
+                        field=wiz.field,
+                        cert_path=wiz.cert,
+                        pyhanko_config=cfg.pyhanko_config,
+                        style_name=cfg.style_name,
+                    )
+                    print(f"\n>>> Signing {f} -> {out}")
+                    print(f"    {shlex.join(cmd)}")
+                    rc = core.run_sign_command(cmd, pyhanko_config=cfg.pyhanko_config).returncode
+                    if rc != 0:
+                        print(f"    pyhanko exited with code {rc}")
+                    elif out.is_file():
+                        answer = input(f"    Open {out.name} in okular? [y/N] ")
+                        if answer.strip().lower() == "y":
+                            subprocess.Popen(
+                                ["okular", str(out)],
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                            )
+            except KeyboardInterrupt:
+                print("\nInterrupted.")
+            finally:
+                input("\nDone. Press Enter to return to the TUI...")
+
+
+# ---------------------------------------------------------------------------
+# Help screen
+# ---------------------------------------------------------------------------
+
+
+class HelpScreen(Screen):
+    BINDINGS = [
+        Binding("escape", "app.pop_screen", "Close"),
+        Binding("f1", "app.pop_screen", "Close"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        yield Vertical(
+            Static("[b]Keyboard shortcuts[/b]\n"),
+            Static(
+                "  Tab / Shift+Tab  — move between fields\n"
+                "  Up / Down        — same as Tab / Shift+Tab\n"
+                "  Enter / Space    — activate focused button\n"
+                "  Escape           — go back\n"
+                "  F1               — show this help\n"
+                "  q                — quit (from main menu)\n"
+            ),
+            Button("Close", id="close"),
+        )
+        yield Footer()
+
+    @on(Button.Pressed, "#close")
+    def _close(self) -> None:
+        self.app.pop_screen()
 
 
 # ---------------------------------------------------------------------------
@@ -563,6 +608,8 @@ class RunScreen(Screen):
 
 
 class SignPdfUiApp(App):
+    COMMANDS = frozenset()  # disable command palette (removes "^p palette" footer hint)
+
     CSS = """
     Screen {
         align: center middle;
@@ -574,6 +621,9 @@ class SignPdfUiApp(App):
     }
     Button {
         margin: 0 1;
+    }
+    #menu Button {
+        width: 100%;
     }
     Input {
         margin-bottom: 1;
@@ -588,7 +638,12 @@ class SignPdfUiApp(App):
     }
     """
 
-    BINDINGS = [Binding("ctrl+c", "app.quit", "Quit", show=False)]
+    BINDINGS = [
+        Binding("ctrl+c", "app.quit", "Quit", show=False),
+        Binding("up", "focus_previous", show=False),
+        Binding("down", "focus_next", show=False),
+        Binding("f1", "show_help", "F1 Help"),
+    ]
 
     def __init__(self, initial_files: Optional[List[Path]] = None) -> None:
         super().__init__()
@@ -601,7 +656,11 @@ class SignPdfUiApp(App):
             self.wizard.files = self._initial_files
             self.push_screen(SelectModeScreen())
 
+    def action_show_help(self) -> None:
+        self.push_screen(HelpScreen())
+
 
 def run_tui(initial_files: Optional[List[Path]] = None) -> int:
     SignPdfUiApp(initial_files=initial_files).run()
+    print()  # ensure terminal cursor is on a fresh line after TUI exits
     return 0
