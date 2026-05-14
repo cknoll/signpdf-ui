@@ -19,8 +19,8 @@ from typing import List, Optional
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import Screen
+from textual.containers import Horizontal, Vertical
+from textual.screen import ModalScreen, Screen
 from textual.widgets import (
     Button,
     Footer,
@@ -516,31 +516,103 @@ class PickCertScreen(Screen):
         self.app.push_screen(ConfirmScreen())
 
 
+class ShowCommandModal(ModalScreen):
+    """Modal that shows the pyhanko command(s) with a clipboard copy button."""
+
+    BINDINGS = [Binding("escape", "app.pop_screen", "Close")]
+
+    def __init__(self, commands: List[List[str]]) -> None:
+        super().__init__()
+        self._commands = commands
+
+    def compose(self) -> ComposeResult:
+        text = "\n".join(shlex.join(cmd) for cmd in self._commands)
+        yield Vertical(
+            Static("[b]pyhanko command(s)[/b]\n"),
+            Static(text, id="cmd_text"),
+            Horizontal(
+                Button("Copy to clipboard", id="copy"),
+                Button("Close", id="close", variant="primary"),
+            ),
+            Static("", id="status"),
+            id="modal_inner",
+        )
+
+    @on(Button.Pressed, "#copy")
+    def _copy(self) -> None:
+        text = "\n".join(shlex.join(cmd) for cmd in self._commands)
+        self.app.copy_to_clipboard(text)
+        self.query_one("#status", Static).update("Copied to clipboard.")
+
+    @on(Button.Pressed, "#close")
+    def _close(self) -> None:
+        self.app.pop_screen()
+
+
+class PasswordModal(ModalScreen):
+    """Modal that prompts for the PKCS#12 password without suspending the TUI."""
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Static("[b]PKCS#12 password[/b]\n"),
+            Input(password=True, placeholder="password", id="pw"),
+            Horizontal(
+                Button("Sign", id="submit", variant="primary"),
+                Button("Cancel", id="cancel"),
+            ),
+            Static("", id="status"),
+            id="modal_inner",
+        )
+
+    def on_mount(self) -> None:
+        self.query_one("#pw", Input).focus()
+
+    @on(Input.Submitted, "#pw")
+    def _enter(self, _event: Input.Submitted) -> None:
+        self._submit()
+
+    @on(Button.Pressed, "#submit")
+    def _on_submit(self) -> None:
+        self._submit()
+
+    def _submit(self) -> None:
+        pw = self.query_one("#pw", Input).value
+        if not pw:
+            self.query_one("#status", Static).update("Password must not be empty.")
+            return
+        self.dismiss(pw)
+
+    @on(Button.Pressed, "#cancel")
+    def _cancel(self) -> None:
+        self.dismiss(None)
+
+
 class ConfirmScreen(Screen):
-    """Shows what's about to happen and lets the user reveal the exact command."""
+    """Shows a compact summary and lets the user inspect the command or sign."""
 
     BINDINGS = [Binding("escape", "app.pop_screen", "Back")]
 
     def compose(self) -> ComposeResult:
         wiz: WizardState = self.app.wizard  # type: ignore[attr-defined]
-        files_preview = "\n".join(f"  • {f} → {core.output_path_for(f).name}" for f in wiz.files[:10])
+        cert_name = wiz.cert.name if wiz.cert else "(none)"
+        mode_str = f"{wiz.mode} ({wiz.field})"
+        files_preview = "\n".join(f"  • {f.name} → {core.output_path_for(f).name}" for f in wiz.files[:10])
         if len(wiz.files) > 10:
             files_preview += f"\n  … and {len(wiz.files) - 10} more"
         yield Header()
         yield Vertical(
             Static("[b]Confirm[/b]\n"),
             Static(
-                f"Mode:        {wiz.mode}\n"
-                f"Field spec:  {wiz.field}\n"
-                f"Certificate: {wiz.cert}\n"
-                f"Files:\n{files_preview}\n"
+                f"Mode:  {mode_str}\n"
+                f"Cert:  {cert_name}\n"
+                f"Files ({len(wiz.files)}):\n{files_preview}\n"
             ),
             Horizontal(
                 Button("Show command", id="show"),
                 Button("Sign", id="sign", variant="primary"),
                 Button("Back", id="back"),
             ),
-            VerticalScroll(RichLog(id="cmd", markup=False, highlight=False)),
+            Static("", id="status"),
         )
         yield Footer()
 
@@ -552,15 +624,11 @@ class ConfirmScreen(Screen):
     def _show(self) -> None:
         cfg = _load_config_or_none()
         if cfg is None:
-            self.query_one("#cmd", RichLog).write(
-                "UI config not found. Run `signpdf-ui --init` first."
-            )
+            self.query_one("#status", Static).update("Config not found. Run `signpdf-ui --init` first.")
             return
         wiz: WizardState = self.app.wizard  # type: ignore[attr-defined]
-        log: RichLog = self.query_one("#cmd", RichLog)
-        log.clear()
-        for f in wiz.files:
-            cmd = core.build_sign_command(
+        cmds = [
+            core.build_sign_command(
                 input_file=f,
                 output_file=core.output_path_for(f),
                 field=wiz.field,
@@ -568,75 +636,93 @@ class ConfirmScreen(Screen):
                 pyhanko_config=cfg.pyhanko_config,
                 style_name=cfg.style_name,
             )
-            log.write(shlex.join(cmd))
+            for f in wiz.files
+        ]
+        self.app.push_screen(ShowCommandModal(commands=cmds))
 
     @on(Button.Pressed, "#sign")
     def _sign(self) -> None:
-        self.app.push_screen(RunScreen())
+        cfg = _load_config_or_none()
+        if cfg is None:
+            self.query_one("#status", Static).update("Config not found. Run `signpdf-ui --init` first.")
+            return
+        self.app.push_screen(PasswordModal(), callback=self._on_password)
+
+    def _on_password(self, password: Optional[str]) -> None:
+        if password is None:
+            return
+        cfg = _load_config_or_none()
+        if cfg is None:
+            return
+        wiz: WizardState = self.app.wizard  # type: ignore[attr-defined]
+        results = []
+        for f in wiz.files:
+            out = core.output_path_for(f)
+            cmd = core.build_sign_command(
+                input_file=f,
+                output_file=out,
+                field=wiz.field,
+                cert_path=wiz.cert,
+                pyhanko_config=cfg.pyhanko_config,
+                style_name=cfg.style_name,
+            )
+            proc = core.run_sign_command(
+                cmd,
+                pyhanko_config=cfg.pyhanko_config,
+                stdin=f"{password}\n",
+                capture_output=True,
+            )
+            results.append((f, out, proc.returncode, proc.stderr or ""))
+        self.app.push_screen(SignResultScreen(results=results))
 
 
-class RunScreen(Screen):
-    """Runs the signing commands one-by-one, prompting for a password per file."""
+class SignResultScreen(Screen):
+    """Shows per-file signing results with optional Okular open buttons."""
 
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back to menu")]
+    BINDINGS = [Binding("escape", "action_done", "Done")]
+
+    def __init__(self, results: List) -> None:
+        super().__init__()
+        self._results = results  # List of (in_path, out_path, returncode, stderr)
+        self._success_outputs: List[Path] = [
+            out for _, out, rc, _ in results if rc == 0 and out.is_file()
+        ]
 
     def compose(self) -> ComposeResult:
+        lines = []
+        for in_f, out_f, rc, stderr in self._results:
+            icon = "✓" if rc == 0 else "✗"
+            lines.append(f"  {icon} {in_f.name} → {out_f.name}")
+            if rc != 0:
+                for line in (stderr or "").strip().splitlines()[:4]:
+                    lines.append(f"      {line}")
         yield Header()
         yield Vertical(
-            Static("[b]Signing[/b]\n"),
-            RichLog(id="log", markup=False, highlight=False),
-            Horizontal(
-                Button("Run all (prompts password per file)", id="run", variant="primary"),
-                Button("Back to menu", id="back"),
-            ),
+            Static("[b]Signing results[/b]\n"),
+            Static("\n".join(lines) + "\n"),
+            *[
+                Button(f"Open {out_f.name} in Okular", id=f"okular_{i}")
+                for i, out_f in enumerate(self._success_outputs)
+            ],
+            Button("Done (back to menu)", id="done", variant="primary"),
         )
         yield Footer()
 
-    @on(Button.Pressed, "#back")
-    def _back(self) -> None:
-        # Pop back through wizard screens to the main menu.
+    @on(Button.Pressed, "#done")
+    def action_done(self) -> None:
         while len(self.app.screen_stack) > 1:
             self.app.pop_screen()
 
-    @on(Button.Pressed, "#run")
-    def _run(self) -> None:
-        cfg = _load_config_or_none()
-        log: RichLog = self.query_one("#log", RichLog)
-        if cfg is None:
-            log.write("UI config not found. Run `signpdf-ui --init` first.")
-            return
-        wiz: WizardState = self.app.wizard  # type: ignore[attr-defined]
-        # Suspend the TUI so pyhanko can prompt for the password on the real
-        # terminal. This matches the legacy per-file-prompt behavior.
-        with self.app.suspend():
-            try:
-                for f in wiz.files:
-                    out = core.output_path_for(f)
-                    cmd = core.build_sign_command(
-                        input_file=f,
-                        output_file=out,
-                        field=wiz.field,
-                        cert_path=wiz.cert,
-                        pyhanko_config=cfg.pyhanko_config,
-                        style_name=cfg.style_name,
-                    )
-                    print(f"\n>>> Signing {f} -> {out}")
-                    print(f"    {shlex.join(cmd)}")
-                    rc = core.run_sign_command(cmd, pyhanko_config=cfg.pyhanko_config).returncode
-                    if rc != 0:
-                        print(f"    pyhanko exited with code {rc}")
-                    elif out.is_file():
-                        answer = input(f"    Open {out.name} in okular? [y/N] ")
-                        if answer.strip().lower() == "y":
-                            subprocess.Popen(
-                                ["okular", str(out)],
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL,
-                            )
-            except KeyboardInterrupt:
-                print("\nInterrupted.")
-            finally:
-                input("\nDone. Press Enter to return to the TUI...")
+    @on(Button.Pressed)
+    def _any_button(self, event: Button.Pressed) -> None:
+        bid = event.button.id or ""
+        if bid.startswith("okular_"):
+            idx = int(bid.split("_", 1)[1])
+            subprocess.Popen(
+                ["okular", str(self._success_outputs[idx])],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -685,7 +771,7 @@ class SignPdfUiApp(App):
     Screen {
         align: center middle;
     }
-    Vertical, VerticalScroll {
+    Vertical {
         width: 80%;
         max-width: 100;
         padding: 1 2;
@@ -706,6 +792,16 @@ class SignPdfUiApp(App):
     RichLog {
         height: 12;
         border: solid $accent;
+    }
+    ModalScreen {
+        align: center middle;
+    }
+    #modal_inner {
+        width: 80%;
+        max-width: 100;
+        padding: 1 2;
+        background: $surface;
+        border: solid $primary;
     }
     """
 
