@@ -94,15 +94,24 @@ def _cmd_demo() -> int:
     print(f"Demo files copied to {demo_dir}/\n")
     for name in paths.FIXTURE_PDF_FILENAMES:
         print(f"  {demo_dir / name}")
+
     print(f"\nTo try signpdf-ui:\n")
-    print(f"  1. Initialize config (once, if not done yet):")
-    print(f"       signpdf-ui --init\n")
-    print(f"  2. Detect existing signature fields:")
-    print(f"       signpdf-ui --detect-fields {demo_dir / 'demo-form-with-sign-fields.pdf'}\n")
-    print(f"  3. Open the signing UI with a demo file pre-loaded:")
-    print(f"       signpdf-ui {demo_dir / 'demo-form-with-sign-fields.pdf'}\n")
-    print(f"  4. Or sign multiple files at once:")
-    print(f'       signpdf-ui --multi "{demo_dir}/*.pdf"\n')
+
+    if paths.ui_config_path().exists():
+        print(f"  1. Config already initialized — skip this step.")
+    else:
+        print(f"  1. Initialize config (once):")
+        print(f"       signpdf-ui --init")
+    print()
+
+    print(f"  2. Open a demo file — pick the one that matches the workflow you want to try:\n")
+    print(f"     a) PDF with predefined signature fields (use 'Existing signature field' mode):")
+    print(f"          signpdf-ui {demo_dir / 'demo-form-with-sign-fields.pdf'}\n")
+    print(f"     b) PDF with rect annotations already present (use 'Geometry' mode):")
+    print(f"          signpdf-ui {demo_dir / 'demo-form-raw-with-rects.pdf'}\n")
+    print(f"     c) PDF without rects — try the Okular workflow to draw and import a rect:")
+    print(f"          signpdf-ui {demo_dir / 'demo-form-raw.pdf'}\n")
+
     print(f"The bundled demo certificate is used by default after --init.")
     print(f"Replace default_cert in ~/.config/signpdf-ui/signpdf-ui.yml with your own .p12.")
     return 0
