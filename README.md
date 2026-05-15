@@ -35,19 +35,20 @@ Main menu entries:
 - **Extract rect coordinates** — lists the bounding boxes of all PDF rectangle annotations, ready to paste into the geometry-mode field spec.
 - **Edit config (ui)** / **Edit config (pyhanko)** — opens the respective YAML in `$VISUAL` / `$EDITOR` (or `xdg-open`).
 
-Per the current security stance, you are prompted for the PKCS#12 password once per file (matches the legacy bash flow). This is suspended through to the underlying terminal so pyhanko's own prompt is used.
+You are prompted for the PKCS#12 password via a modal dialog before signing. If the password is rejected a **Wrong password** modal appears with options to try again or go back.
 
 ### Defining the signature area visually with Okular
 
-When you choose **Geometry (page + bounding box)** mode, you can use Okular to draw the exact area where the signature stamp should appear instead of typing raw coordinates:
+When you choose **Geometry (page + bounding box)** mode, the UI automatically extracts any existing rect annotations from the file and lists them for you to pick. If none are present (or you want a new one):
 
-1. In the geometry step, click **"Open copy in Okular to draw rect"**.  
+1. Click **"Open copy in Okular to draw rect"**.  
    A temporary copy of the PDF opens in Okular — the original file is never touched.
 2. In Okular, select the **Rectangle annotation tool** (toolbar ▭ button, or *Insert → Rectangle*).
-3. Draw a rectangle over the desired signature area, then **save** with **Ctrl+S**.
-4. Back in the UI, click **"Import rect from Okular file"**.  
-   The tool reads only the *newly added* rectangle (pre-existing rects in the original are ignored) and pre-fills the field spec as `1/X1,Y1,X2,Y2/X1`.
-5. Adjust the page number (first token) and field name (last token) if needed, then proceed.
+3. Draw a rectangle over the desired signature area, **save** with **Ctrl+S**, then **close Okular**.  
+   The UI reads the temp file automatically and imports the single new rectangle.
+4. Adjust the page number (first token) and field name (last token) of the pre-filled spec if needed, then proceed.
+
+If you accidentally draw more than one rectangle the UI tells you and lets you try again.
 
 > **Note:** Okular must be configured to embed annotations into the PDF file (the default when saving with Ctrl+S, as opposed to keeping a sidecar `.okular` file). The signature is applied to the *original* file; the temporary Okular copy is only used to capture the rectangle coordinates.
 
@@ -86,4 +87,5 @@ Test layout:
 
 - `tests/test_core.py` — unit tests for command building and the two parsers (field-list parser, rect extractor). These are the things most likely to break under future pyhanko or PDF format changes, so they get explicit coverage.
 - `tests/test_e2e.py` — invokes the real `pyhanko sign addsig` against the bundled demo PDFs and the test certificate. Skipped if `pyhanko` is not on `PATH`.
+- `tests/test_tui.py` — lightweight TUI regression tests (no running app required).
 - `tests/fixtures/` — demo PDFs + a self-signed test certificate (password `KXzolC-test-pw-s9Ckp7oZ`, not used anywhere else).

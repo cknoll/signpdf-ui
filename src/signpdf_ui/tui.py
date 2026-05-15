@@ -570,6 +570,34 @@ class ShowCommandModal(ModalScreen):
         self.app.pop_screen()
 
 
+class WrongPasswordModal(ModalScreen):
+    """Shown when pyhanko rejects the PKCS#12 password."""
+
+    BINDINGS = [*_LR]
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Static("[b]Wrong password[/b]\n"),
+            Static("The PKCS#12 password was rejected.\nCheck your certificate password and try again."),
+            Horizontal(
+                Button("Try again", id="retry", variant="primary"),
+                Button("Back", id="back"),
+            ),
+            id="modal_inner",
+        )
+
+    def on_mount(self) -> None:
+        self.query_one("#retry", Button).focus()
+
+    @on(Button.Pressed, "#retry")
+    def _retry(self) -> None:
+        self.dismiss(True)
+
+    @on(Button.Pressed, "#back")
+    def _back(self) -> None:
+        self.dismiss(False)
+
+
 class PasswordModal(ModalScreen):
     """Modal that prompts for the PKCS#12 password without suspending the UI."""
 
@@ -703,11 +731,13 @@ class ConfirmScreen(Screen):
         if all(rc != 0 for _, _, rc, _ in results) and any(
             core.is_wrong_password_error(stderr) for _, _, _, stderr in results
         ):
-            self.query_one("#status", Static).update(
-                "Wrong password — please try again or press Back."
-            )
+            self.app.push_screen(WrongPasswordModal(), callback=self._on_wrong_password)
             return
         self.app.push_screen(SignResultScreen(results=results))
+
+    def _on_wrong_password(self, retry: bool) -> None:
+        if retry:
+            self.app.push_screen(PasswordModal(), callback=self._on_password)
 
 
 class SignResultScreen(Screen):
