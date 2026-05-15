@@ -280,9 +280,10 @@ class SelectModeScreen(Screen):
 
     def compose(self) -> ComposeResult:
         files: List[Path] = self.app.wizard.files  # type: ignore[attr-defined]
-        preview = "\n".join(f"  • {f}" for f in files[:10])
-        if len(files) > 10:
-            preview += f"\n  … and {len(files) - 10} more"
+        preview_N = 5
+        preview = "\n".join(f"  • {f}" for f in files[:preview_N])
+        if len(files) > preview_N:
+            preview += f"\n  … and {len(files) - preview_N} more"
         yield Header()
         yield Vertical(
             Static("[b]Step 2/4 — Choose signing mode[/b]\n"),
