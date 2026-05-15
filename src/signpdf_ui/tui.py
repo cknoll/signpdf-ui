@@ -369,13 +369,11 @@ class PickGeometryScreen(Screen):
         yield Header()
         yield Vertical(
             Static("[b]Step 3/4 — Geometry[/b]\n"),
-            Static(
-                "Format: PAGE/X1,Y1,X2,Y2/NAME — e.g. `1/189,578,356,615/X1`.\n"
-                "Pick an existing rect below, or open a copy in Okular to draw a new one.\n",
-            ),
+            Static("Format: PAGE/X1,Y1,X2,Y2/NAME — e.g. `1/189,578,356,615/X1`.\n"),
             Label("Field spec:"),
             Input(placeholder="1/189,578,356,615/X1", id="field"),
             Button("Open copy in Okular to draw rect", id="okular_open"),
+            Static("", id="rect_hint"),
             ListView(id="rects"),
             Horizontal(
                 Button("Use spec", id="use", variant="primary"),
@@ -394,11 +392,11 @@ class PickGeometryScreen(Screen):
             for rect in rects:
                 lv.append(ListItem(Label(rect)))
             if rects:
-                self.query_one("#status", Static).update(
-                    f"{len(rects)} rect(s) found — pick one or open Okular to draw a new one."
+                self.query_one("#rect_hint", Static).update(
+                    f"{len(rects)} rect(s) found — pick one:"
                 )
             else:
-                self.query_one("#status", Static).update(
+                self.query_one("#rect_hint", Static).update(
                     "No rects found — open Okular to draw one."
                 )
         except Exception as exc:  # noqa: BLE001
