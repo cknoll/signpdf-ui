@@ -290,6 +290,7 @@ class SelectModeScreen(Screen):
             Static(f"Files selected ({len(files)}):\n{preview}\n"),
             Button("Existing signature field (form)", id="mode_field", variant="primary"),
             Button("Geometry (page + bounding box)", id="mode_geom"),
+
             Button("Back", id="back"),
         )
         yield Footer()
@@ -815,7 +816,7 @@ class SignPdfUiApp(App):
     Button {
         margin: 0 1;
     }
-    #menu Button {
+    Vertical > Button {
         width: 100%;
     }
     Input {
