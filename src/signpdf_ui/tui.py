@@ -437,9 +437,9 @@ class PickGeometryScreen(Screen):
             copy_rects = core.extract_rects(self._okular_temp)
             new_rects = [r for r in copy_rects if r not in self._original_rects]
         except Exception as exc:  # noqa: BLE001
-            self.call_from_thread(self._set_status, f"Error: {exc}")
+            self.app.call_from_thread(self._set_status, f"Error: {exc}")
             return
-        self.call_from_thread(self._handle_okular_result, new_rects)
+        self.app.call_from_thread(self._handle_okular_result, new_rects)
 
     def _set_status(self, msg: str) -> None:
         self.query_one("#status", Static).update(msg)
