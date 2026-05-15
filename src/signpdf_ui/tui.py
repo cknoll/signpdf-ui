@@ -16,7 +16,7 @@ import tempfile
 from pathlib import Path
 from typing import List, Optional
 
-from textual import on
+from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -362,28 +362,21 @@ class PickGeometryScreen(Screen):
 
     def __init__(self) -> None:
         super().__init__()
-        self._okular_temp: Optional[Path] = None  # temp copy opened in Okular
-        self._original_rects: List[str] = []  # rects present before Okular edit
+        self._okular_temp: Optional[Path] = None
+        self._original_rects: List[str] = []
 
     def compose(self) -> ComposeResult:
-        files: List[Path] = self.app.wizard.files  # type: ignore[attr-defined]
-        extract_label = "Extract rects from file" if len(files) == 1 else "Extract rects from first file"
         yield Header()
         yield Vertical(
             Static("[b]Step 3/4 — Geometry[/b]\n"),
             Static(
                 "Format: PAGE/X1,Y1,X2,Y2/NAME — e.g. `1/189,578,356,615/X1`.\n"
-                "Extract existing rects from the file, or open a copy in Okular\n"
-                "and draw a rectangle annotation to define the signature area.\n",
+                "Pick an existing rect below, or open a copy in Okular to draw a new one.\n",
             ),
             Label("Field spec:"),
             Input(placeholder="1/189,578,356,615/X1", id="field"),
-            Horizontal(
-                Button(extract_label, id="extract"),
-                Button("Open copy in Okular to draw rect", id="okular_open"),
-            ),
+            Button("Open copy in Okular to draw rect", id="okular_open"),
             ListView(id="rects"),
-            Button("Import rect from Okular file", id="okular_import", disabled=True),
             Horizontal(
                 Button("Use spec", id="use", variant="primary"),
                 Button("Back", id="back"),
@@ -392,79 +385,76 @@ class PickGeometryScreen(Screen):
         )
         yield Footer()
 
+    def on_mount(self) -> None:
+        files: List[Path] = self.app.wizard.files  # type: ignore[attr-defined]
+        try:
+            rects = core.extract_rects(files[0])
+            self._original_rects = rects
+            lv: ListView = self.query_one("#rects", ListView)
+            for rect in rects:
+                lv.append(ListItem(Label(rect)))
+            if rects:
+                self.query_one("#status", Static).update(
+                    f"{len(rects)} rect(s) found — pick one or open Okular to draw a new one."
+                )
+            else:
+                self.query_one("#status", Static).update(
+                    "No rects found — open Okular to draw one."
+                )
+        except Exception as exc:  # noqa: BLE001
+            self.query_one("#status", Static).update(f"Error reading rects: {exc}")
+
     @on(Button.Pressed, "#back")
     def _back(self) -> None:
         self.app.pop_screen()
 
-    @on(Button.Pressed, "#extract")
-    def _extract(self) -> None:
-        files: List[Path] = self.app.wizard.files  # type: ignore[attr-defined]
-        first = files[0]
-        lv: ListView = self.query_one("#rects", ListView)
-        lv.clear()
-        try:
-            rects = core.extract_rects(first)
-            if not rects:
-                self.query_one("#status", Static).update(f"No rects found in {first}.")
-                return
-            for rect in rects:
-                lv.append(ListItem(Label(rect)))
-            self.query_one("#status", Static).update(
-                f"{len(rects)} rect(s) found. Pick one to prefill the spec."
-            )
-        except Exception as exc:  # noqa: BLE001
-            self.query_one("#status", Static).update(f"Error: {exc}")
-
     @on(Button.Pressed, "#okular_open")
     def _okular_open(self) -> None:
         files: List[Path] = self.app.wizard.files  # type: ignore[attr-defined]
-        first = files[0]
-        # Remember which rects exist before the user adds anything.
         try:
-            self._original_rects = core.extract_rects(first)
+            self._original_rects = core.extract_rects(files[0])
         except Exception:
             self._original_rects = []
-        # Create a disposable temp copy so the original file is never modified.
         fd, tmp_str = tempfile.mkstemp(suffix=".pdf", prefix="signpdf-rect-")
         os.close(fd)
         self._okular_temp = Path(tmp_str)
-        shutil.copy2(first, self._okular_temp)
-        subprocess.Popen(
-            ["okular", str(self._okular_temp)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        self.query_one("#okular_import", Button).disabled = False
+        shutil.copy2(files[0], self._okular_temp)
         self.query_one("#status", Static).update(
-            f"Okular opened: {self._okular_temp.name}\n"
-            "Draw ONE rectangle annotation (toolbar ▭ or Insert > Rectangle),\n"
-            "save with Ctrl+S, then click 'Import rect from Okular file'."
+            "Okular opened. Draw ONE rectangle annotation (toolbar ▭ or Insert > Rectangle),\n"
+            "save (Ctrl+S), then close Okular — the rect will be imported automatically."
         )
+        self._run_okular()
 
-    @on(Button.Pressed, "#okular_import")
-    def _okular_import(self) -> None:
-        status: Static = self.query_one("#status", Static)
-        if self._okular_temp is None or not self._okular_temp.is_file():
-            status.update("Temp file not found. Use 'Open copy in Okular' first.")
-            return
+    @work(thread=True)
+    def _run_okular(self) -> None:
         try:
+            subprocess.run(
+                ["okular", str(self._okular_temp)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
             copy_rects = core.extract_rects(self._okular_temp)
             new_rects = [r for r in copy_rects if r not in self._original_rects]
         except Exception as exc:  # noqa: BLE001
-            status.update(f"Error reading temp file: {exc}")
+            self.call_from_thread(self._set_status, f"Error: {exc}")
             return
+        self.call_from_thread(self._handle_okular_result, new_rects)
+
+    def _set_status(self, msg: str) -> None:
+        self.query_one("#status", Static).update(msg)
+
+    def _handle_okular_result(self, new_rects: List[str]) -> None:
+        status: Static = self.query_one("#status", Static)
         if not new_rects:
             status.update(
                 "No new rect found. Make sure you drew a rectangle annotation\n"
-                "and saved the file in Okular (Ctrl+S)."
+                "and saved (Ctrl+S) before closing Okular. Try again."
             )
             return
         if len(new_rects) > 1:
-            lv: ListView = self.query_one("#rects", ListView)
-            lv.clear()
-            for r in new_rects:
-                lv.append(ListItem(Label(r)))
-            status.update(f"{len(new_rects)} new rects found — please keep only one and try again.")
+            status.update(
+                f"{len(new_rects)} new rects found — please keep exactly one and try again."
+            )
             return
         rect = new_rects[0]
         self.query_one("#field", Input).value = f"1/{rect}/X1"
