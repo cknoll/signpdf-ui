@@ -370,7 +370,7 @@ class PickGeometryScreen(Screen):
         yield Vertical(
             Static("[b]Step 3/4 — Geometry[/b]\n"),
             Static("Format: PAGE/X1,Y1,X2,Y2/NAME — e.g. `1/189,578,356,615/X1`.\n"),
-            Label("Field spec:"),
+            Label("Manually specify field:"),
             Input(placeholder="1/189,578,356,615/X1", id="field"),
             Button("Open copy in Okular to draw rect", id="okular_open"),
             Static("", id="rect_hint"),
@@ -391,13 +391,16 @@ class PickGeometryScreen(Screen):
             lv: ListView = self.query_one("#rects", ListView)
             for rect in rects:
                 lv.append(ListItem(Label(rect)))
+
+            # mention file name
+            basename = files[0].name
             if rects:
                 self.query_one("#rect_hint", Static).update(
-                    f"{len(rects)} rect(s) found — pick one:"
+                    f"{len(rects)} rect(s) found in {basename} — pick one:"
                 )
             else:
                 self.query_one("#rect_hint", Static).update(
-                    "No rects found — open Okular to draw one."
+                    f"No rects found {basename} — open Okular to draw one."
                 )
         except Exception as exc:  # noqa: BLE001
             self.query_one("#status", Static).update(f"Error reading rects: {exc}")
