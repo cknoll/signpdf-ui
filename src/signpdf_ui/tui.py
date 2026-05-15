@@ -700,6 +700,13 @@ class ConfirmScreen(Screen):
                 start_new_session=True,  # detaches /dev/tty so getpass reads stdin
             )
             results.append((f, out, proc.returncode, proc.stderr or ""))
+        if all(rc != 0 for _, _, rc, _ in results) and any(
+            core.is_wrong_password_error(stderr) for _, _, _, stderr in results
+        ):
+            self.query_one("#status", Static).update(
+                "Wrong password — please try again or press Back."
+            )
+            return
         self.app.push_screen(SignResultScreen(results=results))
 
 

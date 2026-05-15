@@ -317,6 +317,10 @@ def expand_pdf_patterns(patterns: Iterable[str]) -> List[Path]:
     return results
 
 
+def is_wrong_password_error(stderr: str) -> bool:
+    return "Could not load key material from PKCS#12 file" in stderr
+
+
 def cmd_demo() -> Path:
     """Copy bundled demo PDFs to a fresh /tmp/pdfsign-ui-demo-<timestamp>/ directory."""
     demo_dir = Path(f"/tmp/pdfsign-ui-demo-{int(time.time())}")

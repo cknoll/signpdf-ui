@@ -202,5 +202,23 @@ class TestLoadUiConfig(unittest.TestCase):
                 core.load_ui_config(Path(tmp) / "nope.yml")
 
 
+class TestIsWrongPasswordError(unittest.TestCase):
+    _WRONG_PW_STDERR = (
+        "PKCS#12 passphrase: \n"
+        "2026-05-16 00:05:30,686 - pyhanko.sign.signers.pdf_cms - ERROR - "
+        "Could not load key material from PKCS#12 file\n"
+        "Error: Generic processing error.\n"
+    )
+
+    def test_010_detects_wrong_password(self):
+        self.assertTrue(core.is_wrong_password_error(self._WRONG_PW_STDERR))
+
+    def test_020_unrelated_error_not_flagged(self):
+        self.assertFalse(core.is_wrong_password_error("Error: file not found\n"))
+
+    def test_030_empty_stderr_not_flagged(self):
+        self.assertFalse(core.is_wrong_password_error(""))
+
+
 if __name__ == "__main__":
     unittest.main()
