@@ -60,6 +60,7 @@ class TestSignE2E(unittest.TestCase):
             pyhanko_config=self._cfg.pyhanko_config,
             stdin=TEST_CERT_PASSWORD + "\n",
             capture_output=True,
+            start_new_session=True,
         )
         if proc.returncode != 0:
             self.fail(
