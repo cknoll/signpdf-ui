@@ -98,10 +98,12 @@ def _cmd_demo() -> int:
     print(f"\nTo try signpdf-ui:\n")
 
     if paths.ui_config_path().exists():
-        print(f"  1. Config already initialized — skip this step.")
+        # add nice green unicode checkmark
+        hint = "already done ✅"
     else:
-        print(f"  1. Initialize config (once):")
-        print(f"       signpdf-ui --init")
+        hint = "once"
+    print(f"  1. Initialize config ({hint}):")
+    print(f"       signpdf-ui --init")
     print()
 
     print(f"  2. Open a demo file — pick the one that matches the workflow you want to try:\n")
