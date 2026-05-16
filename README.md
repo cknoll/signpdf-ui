@@ -2,7 +2,7 @@
 
 # signpdf-ui
 
-An interactive terminal UI (and small CLI) that wraps [pyhanko](https://github.com/MatthiasValvekens/pyHanko) so you can sign PDFs on Linux without memorizing flags.
+An interactive terminal UI (TUI) that wraps [pyhanko](https://github.com/MatthiasValvekens/pyHanko) so you can sign PDFs on Linux without memorizing flags.
 
 ## Install
 
@@ -18,22 +18,44 @@ signpdf-ui --init
 
 This copies the bundled configuration templates (`signpdf-ui.yml`, `pyhanko.yml`, `watermark.png`) into your user config directory — typically `~/.config/signpdf-ui/` on Linux. Use `--init --force` to overwrite existing files.
 
+
+After this initialization you can run
+
+```bash
+signpdf-ui --demo
+```
+
+to copy bundled demo PDFs to `/tmp/pdfsign-ui-demo-<timestamp>/` and print usage instructions.
+
 ## Usage
 
 ### Interactive UI
 
-Run the bare command to launch the wizard:
+Three ways to launch the wizard:
 
-```bash
-signpdf-ui
-```
+| Command | When to use |
+| --- | --- |
+| `signpdf-ui` | Files are in the working directory — pick them inside the wizard. |
+| `signpdf-ui FILE.pdf` | You already know the file — opens directly at step 2 (mode selection). |
+| `signpdf-ui "docs/*.pdf"` | Multiple files matching a glob — opens at step 2 with all matches pre-loaded. |
+
+**`signpdf-ui`** (bare)
+
+Launches the wizard at the main menu. In step 1 you type a file path or glob pattern (e.g. `*.pdf`) — the list updates live as you type. Selecting an entry or pressing Enter advances to step 2.
+
+**`signpdf-ui FILE.pdf`**
+
+Loads the given file immediately and skips to step 2 (mode selection). Pressing **Alt+←** at any point goes back to step 1, where the file path is already filled in.
+
+**`signpdf-ui "docs/*.pdf"`**
+
+Expands the glob and loads all matching PDFs as a batch; all will be signed with the same settings. Opens directly at step 2.
 
 Main menu entries:
 
-- **Sign PDF(s)** — walks you through: file/pattern → mode (existing signature field or page+bounding box) → field/rect → certificate → confirmation. The confirmation screen has a **"Show command"** button that prints the exact `pyhanko sign addsig ...` invocation for full transparency.
-- **Detect signature fields** — equivalent of `pyhanko sign list`.
-- **Extract rect coordinates** — lists the bounding boxes of all PDF rectangle annotations, ready to paste into the geometry-mode field spec.
-- **Edit config (ui)** / **Edit config (pyhanko)** — opens the respective YAML in `$VISUAL` / `$EDITOR` (or `xdg-open`).
+- **Sign PDF(s)** — walks you through four steps: file/pattern → mode (existing signature field or page+bounding box) → field/rect → certificate → confirmation. The confirmation screen shows the exact `pyhanko sign addsig ...` command(s) inline for full transparency, with a **Copy to clipboard** button.
+- **Edit config for user interface** / **Edit config for backend (pyhanko)** — opens the respective YAML in `$VISUAL` / `$EDITOR` (or `xdg-open`).
+- **Quit (Ctrl+q)** — exits (also available from any screen via the keyboard shortcut).
 
 You are prompted for the PKCS#12 password via a modal dialog before signing. If the password is rejected a **Wrong password** modal appears with options to try again or go back.
 
@@ -41,10 +63,10 @@ You are prompted for the PKCS#12 password via a modal dialog before signing. If 
 
 When you choose **Geometry (page + bounding box)** mode, the UI automatically extracts any existing rect annotations from the file and lists them for you to pick. If none are present (or you want a new one):
 
-1. Click **"Open copy in Okular to draw rect"**.  
+1. Click **"Open copy in Okular to draw rect"**.
    A temporary copy of the PDF opens in Okular — the original file is never touched.
 2. In Okular, select the **Rectangle annotation tool** (toolbar ▭ button, or *Insert → Rectangle*).
-3. Draw a rectangle over the desired signature area, **save** with **Ctrl+S**, then **close Okular**.  
+3. Draw a rectangle over the desired signature area, **save** with **Ctrl+S**, then **close Okular**.
    The UI reads the temp file automatically and imports the single new rectangle.
 4. Adjust the page number (first token) and field name (last token) of the pre-filled spec if needed, then proceed.
 
@@ -61,7 +83,7 @@ signpdf-ui --detect-fields FILE.pdf
 signpdf-ui --extract-rects FILE.pdf
 ```
 
-For batch signing without the UI, use `pyhanko sign addsig` directly — the "Show command" feature in the UI prints the exact invocation if you want a copy-paste starting point.
+For batch signing without the UI, use `pyhanko sign addsig` directly — the confirmation screen in the UI shows the exact invocation, which you can copy to the clipboard as a starting point.
 
 ## Configuration
 
@@ -87,5 +109,5 @@ Test layout:
 
 - `tests/test_core.py` — unit tests for command building and the two parsers (field-list parser, rect extractor). These are the things most likely to break under future pyhanko or PDF format changes, so they get explicit coverage.
 - `tests/test_e2e.py` — invokes the real `pyhanko sign addsig` against the bundled demo PDFs and the test certificate. Skipped if `pyhanko` is not on `PATH`.
-- `tests/test_tui.py` — lightweight TUI regression tests (no running app required).
+- `tests/test_tui.py` — headless Textual pilot tests for visual layout and wizard navigation (uses `IsolatedAsyncioTestCase` + Textual's `run_test`).
 - `tests/fixtures/` — demo PDFs + a self-signed test certificate (password `KXzolC-test-pw-s9Ckp7oZ`, not used anywhere else).
