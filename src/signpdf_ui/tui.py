@@ -655,7 +655,7 @@ class ConfirmScreen(Screen):
             )
             self._cmds.append(cmd)
             log.write(shlex.join(cmd))
-        log.styles.height = min(len(self._cmds), 5) + 2  # +2 for top/bottom border
+        log.styles.height = min(len(self._cmds), 5) + 3  # borders(2) + horizontal scrollbar(1)
 
     @on(Button.Pressed, "#back")
     def _back(self) -> None:
