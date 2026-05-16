@@ -794,10 +794,10 @@ class SignPdfUiApp(App):
         color: $error;
     }
     MainMenu #edit_ui {
-        margin-top: 1;
+        margin: 1 1 0 1;
     }
     MainMenu #quit {
-        margin-top: 1;
+        margin: 1 1 0 1;
     }
     ConfirmScreen #cmd_hint {
         margin-top: 1;
