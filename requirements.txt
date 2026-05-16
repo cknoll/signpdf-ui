@@ -1,4 +1,4 @@
-textual>=0.50
+textual>=0.81,<1
 pyyaml
 platformdirs
 pyhanko
