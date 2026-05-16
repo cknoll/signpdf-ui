@@ -802,7 +802,7 @@ class SignPdfUiApp(App):
 
     BINDINGS = [
         Binding("ctrl+c", "app.quit", "Quit", show=False),
-        Binding("ctrl+q", "quit", "Quit"),
+        Binding("ctrl+q", "quit", "Quit", key_display="CTRL+q"),
         Binding("up", "focus_previous", show=False),
         Binding("down", "focus_next", show=False),
         Binding("left", "focus_previous", show=False),
