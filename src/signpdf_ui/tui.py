@@ -81,11 +81,9 @@ class MainMenu(Screen):
         yield Vertical(
             Static("signpdf-ui — sign PDFs through pyhanko\n", id="title"),
             Button("Sign PDF(s)", id="sign", variant="primary"),
-            Button("Detect signature fields", id="detect"),
-            Button("Extract rect coordinates", id="rects"),
             Button("Edit config (ui)", id="edit_ui"),
             Button("Edit config (pyhanko)", id="edit_pyhanko"),
-            Button("Quit (q)", id="quit"),
+            Button("Quit (CTRL+q)", id="quit"),
             id="menu",
         )
         yield Footer()
@@ -93,14 +91,6 @@ class MainMenu(Screen):
     @on(Button.Pressed, "#sign")
     def _go_sign(self) -> None:
         self.app.push_screen(SelectFilesScreen())
-
-    @on(Button.Pressed, "#detect")
-    def _go_detect(self) -> None:
-        self.app.push_screen(SingleFileActionScreen(mode="detect"))
-
-    @on(Button.Pressed, "#rects")
-    def _go_rects(self) -> None:
-        self.app.push_screen(SingleFileActionScreen(mode="rects"))
 
     @on(Button.Pressed, "#edit_ui")
     def _edit_ui(self) -> None:
@@ -157,72 +147,6 @@ class MessageScreen(Screen):
     @on(Button.Pressed, "#back")
     def _back(self) -> None:
         self.app.pop_screen()
-
-
-# ---------------------------------------------------------------------------
-# "Single file action" — detect fields / extract rects
-# ---------------------------------------------------------------------------
-
-
-class SingleFileActionScreen(Screen):
-    """Asks for one PDF, then runs either field detection or rect extraction."""
-
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
-
-    def __init__(self, *, mode: str) -> None:
-        super().__init__()
-        assert mode in ("detect", "rects")
-        self._mode = mode
-
-    def compose(self) -> ComposeResult:
-        action_label = "Detect signature fields" if self._mode == "detect" else "Extract rect coordinates"
-        yield Header()
-        yield Vertical(
-            Static(f"[b]{action_label}[/b]\n"),
-            Label("PDF file:"),
-            Input(placeholder="path/to/file.pdf", id="path"),
-            Horizontal(
-                Button("Run", id="run", variant="primary"),
-                Button("Back", id="back"),
-            ),
-            RichLog(id="output", highlight=False, markup=False),
-        )
-        yield Footer()
-
-    @on(Button.Pressed, "#back")
-    def _back(self) -> None:
-        self.app.pop_screen()
-
-    @on(Button.Pressed, "#run")
-    def _run(self) -> None:
-        log: RichLog = self.query_one("#output", RichLog)
-        log.clear()
-        path_value = self.query_one("#path", Input).value.strip()
-        if not path_value:
-            log.write("No file given.")
-            return
-        path = Path(path_value).expanduser()
-        if not path.is_file():
-            log.write(f"Not a file: {path}")
-            return
-        try:
-            if self._mode == "detect":
-                results = core.list_fields(path)
-                if not results:
-                    log.write("(no signature fields found)")
-                for name in results:
-                    log.write(name)
-            else:
-                results = core.extract_rects(path)
-                if not results:
-                    log.write("(no rects found)")
-                for rect in results:
-                    log.write(rect)
-        except subprocess.CalledProcessError as exc:
-            log.write(f"pyhanko failed (exit {exc.returncode}):")
-            log.write(exc.stderr or "(no stderr)")
-        except Exception as exc:  # noqa: BLE001 — surface anything to the user
-            log.write(f"Error: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -800,6 +724,7 @@ class HelpScreen(Screen):
                 "  Escape                 — go back\n"
                 "  F1                     — show this help\n"
                 "  q                      — quit (from main menu)\n"
+                "  Ctrl+q                 — quit (from any screen)\n"
             ),
             Button("Close", id="close"),
         )
@@ -858,6 +783,12 @@ class SignPdfUiApp(App):
     .warning-title {
         color: $error;
     }
+    MainMenu #edit_ui {
+        margin-top: 1;
+    }
+    MainMenu #quit {
+        margin-top: 1;
+    }
     ConfirmScreen #cmd_hint {
         margin-top: 1;
     }
@@ -871,6 +802,7 @@ class SignPdfUiApp(App):
 
     BINDINGS = [
         Binding("ctrl+c", "app.quit", "Quit", show=False),
+        Binding("ctrl+q", "quit", "Quit", show=False),
         Binding("up", "focus_previous", show=False),
         Binding("down", "focus_next", show=False),
         Binding("left", "focus_previous", show=False),
