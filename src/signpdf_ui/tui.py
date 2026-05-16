@@ -375,12 +375,13 @@ class PickGeometryScreen(Screen):
         self._original_rects: List[str] = []
 
     def compose(self) -> ComposeResult:
+        default_field_spec = "1/320,750,470,825/MY_CUSTOM_FIELD" # 150x75pt
         yield Header()
         yield Vertical(
             Static("[b]Step 3/4 — Signature placement[/b]\n"),
-            Static("Format: PAGE/X1,Y1,X2,Y2/NAME — e.g. `1/189,578,356,615/X1`.\n"),
+            Static(f"Format: PAGE/X1,Y1,X2,Y2/NAME — e.g. `{default_field_spec}`.\n"),
             Label("Manually specify field (or just use the default):"),
-            Input(value="1/80,10,180,60/MY_CUSTOM_FIELD", id="field"),
+            Input(value=default_field_spec, id="field"),
             Button("Open copy in Okular to draw rect", id="okular_open"),
             Static("", id="rect_hint"),
             ListView(id="rects"),
