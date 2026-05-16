@@ -13,12 +13,14 @@ from unittest.mock import patch
 
 from textual.app import App
 from textual.screen import Screen
-from textual.widgets import RichLog
+from textual.widgets import Button, Input, ListView, RichLog
 
 from textual.widgets import Button
 
+from unittest.mock import patch
+
 from signpdf_ui import core, paths
-from signpdf_ui.tui import ConfirmScreen, PickGeometryScreen, SignPdfUiApp
+from signpdf_ui.tui import ConfirmScreen, PickGeometryScreen, SelectFilesScreen, SignPdfUiApp
 
 
 class TestPickGeometryWorker(unittest.TestCase):
@@ -51,6 +53,42 @@ def _make_app(cfg, n_files: int) -> SignPdfUiApp:
     app.wizard.field = "Person1"
     app.wizard.mode = "field"
     return app
+
+
+class TestSelectFilesScreen(unittest.IsolatedAsyncioTestCase):
+    """Tests for the step-1 file picker."""
+
+    async def test_file_list_highlight_updates_input(self):
+        """Navigating the file list with ↓/↑ fills the pattern Input."""
+        fake_files = [Path("/tmp/alpha.pdf"), Path("/tmp/beta.pdf"), Path("/tmp/gamma.pdf")]
+
+        with patch("signpdf_ui.core.expand_pdf_patterns", return_value=fake_files):
+            app = SignPdfUiApp()
+            async with app.run_test(size=(120, 40)) as pilot:
+                await app.push_screen(SelectFilesScreen())
+                await pilot.pause()
+                await pilot.pause()
+
+                lv = app.query_one("#file_list", ListView)
+                inp = app.query_one("#pattern", Input)
+
+                self.assertEqual(len(list(lv.children)), 3, "List should show all fake files")
+
+                # Focus the list and navigate down — each move should update the Input
+                lv.focus()
+                await pilot.pause()
+                before = inp.value
+
+                await pilot.press("down")
+                await pilot.pause()
+                after = inp.value
+
+                self.assertIn(
+                    after,
+                    [str(f) for f in fake_files],
+                    "Input must contain a path from the file list after pressing ↓",
+                )
+                self.assertNotEqual(before, after, "Input should change when list highlight moves")
 
 
 class TestMainMenuLayout(unittest.IsolatedAsyncioTestCase):

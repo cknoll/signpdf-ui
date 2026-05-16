@@ -34,6 +34,7 @@ from textual.widgets import (
 )
 
 from . import core, paths
+from .release import __version__ as _version
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +68,15 @@ _LR = (
     Binding("right", "app.focus_next", show=False),
 )
 
+# Back navigation for screens that have a Back action.
+# ctrl+left mirrors escape so users can always reach it without leaving the keyboard home row.
+_BACK_LR = (
+    Binding("escape", "app.pop_screen", "Back", show=False),
+    Binding("ctrl+left", "app.pop_screen", "Back", show=False),
+    Binding("left", "app.focus_previous", show=False),
+    Binding("right", "app.focus_next", show=False),
+)
+
 
 # ---------------------------------------------------------------------------
 # Main menu
@@ -83,6 +93,7 @@ class MainMenu(Screen):
             Button("Sign PDF(s)", id="sign", variant="primary"),
             Button("Edit config for user interface", id="edit_ui"),
             Button("Edit config for backend (pyhanko)", id="edit_pyhanko"),
+            Button("Send feedback", id="feedback"),
             Button("Quit (CTRL+q)", id="quit"),
             id="menu",
         )
@@ -117,6 +128,10 @@ class MainMenu(Screen):
         with self.app.suspend():
             _open_in_editor(path, editor_override=editor_override)
 
+    @on(Button.Pressed, "#feedback")
+    def _feedback(self) -> None:
+        pass  # placeholder — not yet implemented
+
     @on(Button.Pressed, "#quit")
     def _quit(self) -> None:
         self.app.exit()
@@ -128,7 +143,7 @@ class MainMenu(Screen):
 
 
 class MessageScreen(Screen):
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
+    BINDINGS = [*_BACK_LR]
 
     def __init__(self, *, title: str, text: str) -> None:
         super().__init__()
@@ -140,7 +155,7 @@ class MessageScreen(Screen):
         yield Vertical(
             Static(f"[b]{self._title}[/b]\n"),
             Static(self._text),
-            Button("Back", id="back"),
+            Button("← Back", id="back"),
         )
         yield Footer()
 
@@ -163,27 +178,71 @@ class WizardState:
 
 
 class SelectFilesScreen(Screen):
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
+    BINDINGS = [*_BACK_LR]
 
     def __init__(self, initial_pattern: str = "") -> None:
         super().__init__()
-        self._initial_pattern = initial_pattern
+        self._initial_pattern = initial_pattern or "*.pdf"
+        self._suppress_list_refresh: bool = False
+        self._found_files: List[Path] = []
 
     def compose(self) -> ComposeResult:
         yield Header()
         yield Vertical(
             Static("[b]Step 1/4 — Select PDF(s)[/b]\n"),
             Static(f"Working directory: {Path.cwd()}\n"),
+            Static("", id="found_label"),
+            ListView(id="file_list"),
             Label("File name or pattern (e.g. report.pdf or *.pdf):"),
-            Static("Use * as a wildcard to select multiple files at once.\n"),
+            Static("Hint: Use * as a wildcard to select multiple files at once.\n"),
             Input(value=self._initial_pattern, placeholder="*.pdf", id="pattern"),
             Horizontal(
                 Button("Next  [↵ Enter]", id="next", variant="primary"),
-                Button("Back", id="back"),
+                Button("← Back", id="back"),
             ),
             Static("", id="status"),
         )
         yield Footer()
+
+    def on_mount(self) -> None:
+        self._refresh_file_list(set_focus=True)
+
+    def _refresh_file_list(self, set_focus: bool = False) -> None:
+        pattern = self.query_one("#pattern", Input).value.strip() or "*.pdf"
+        self._found_files = core.expand_pdf_patterns([pattern])
+        n = len(self._found_files)
+        word = "file" if n == 1 else "files"
+        self.query_one("#found_label", Static).update(f"Found {n} PDF {word}:")
+        lv: ListView = self.query_one("#file_list", ListView)
+        lv.clear()
+        for f in self._found_files:
+            lv.append(ListItem(Label(str(f))))
+        if set_focus:
+            if self._found_files:
+                lv.focus()
+            else:
+                self.query_one("#pattern", Input).focus()
+
+    @on(Input.Changed, "#pattern")
+    def _on_pattern_changed(self, _: Input.Changed) -> None:
+        if self._suppress_list_refresh:
+            self._suppress_list_refresh = False
+            return
+        self._refresh_file_list()
+
+    @on(ListView.Highlighted, "#file_list")
+    def _on_file_highlighted(self, event: ListView.Highlighted) -> None:
+        if event.item is None:
+            return
+        lv: ListView = self.query_one("#file_list", ListView)
+        idx = lv.index
+        if idx is not None and 0 <= idx < len(self._found_files):
+            self._suppress_list_refresh = True
+            self.query_one("#pattern", Input).value = str(self._found_files[idx])
+
+    @on(ListView.Selected, "#file_list")
+    def _on_file_selected(self, _: ListView.Selected) -> None:
+        self._next()
 
     @on(Button.Pressed, "#back")
     def _back(self) -> None:
@@ -206,7 +265,7 @@ class SelectFilesScreen(Screen):
 
 
 class SelectModeScreen(Screen):
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
+    BINDINGS = [*_BACK_LR]
 
     def compose(self) -> ComposeResult:
         files: List[Path] = self.app.wizard.files  # type: ignore[attr-defined]
@@ -221,7 +280,7 @@ class SelectModeScreen(Screen):
             Button("Use a signature field built into the PDF", id="mode_field", variant="primary"),
             Button("Place the signature in a custom area", id="mode_geom"),
 
-            Button("Back", id="back"),
+            Button("← Back", id="back"),
         )
         yield Footer()
 
@@ -243,7 +302,7 @@ class SelectModeScreen(Screen):
 class PickFieldScreen(Screen):
     """Lists fields detected in the *first* selected file and lets the user pick one."""
 
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
+    BINDINGS = [*_BACK_LR]
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -253,7 +312,7 @@ class PickFieldScreen(Screen):
             ListView(id="fields"),
             Horizontal(
                 Button("Sign at the selected field", id="use", variant="primary"),
-                Button("Back", id="back"),
+                Button("← Back", id="back"),
             ),
         )
         yield Footer()
@@ -288,7 +347,7 @@ class PickFieldScreen(Screen):
 class PickGeometryScreen(Screen):
     """Geometry mode: pick a page, pick or enter a bbox, give the field a name."""
 
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
+    BINDINGS = [*_BACK_LR]
 
     def __init__(self) -> None:
         super().__init__()
@@ -307,7 +366,7 @@ class PickGeometryScreen(Screen):
             ListView(id="rects"),
             Horizontal(
                 Button("Use spec", id="use", variant="primary"),
-                Button("Back", id="back"),
+                Button("← Back", id="back"),
             ),
             Static("", id="status"),
         )
@@ -412,7 +471,7 @@ class PickGeometryScreen(Screen):
 
 
 class PickCertScreen(Screen):
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
+    BINDINGS = [*_BACK_LR]
 
     def compose(self) -> ComposeResult:
         cfg = _load_config_or_none()
@@ -424,7 +483,7 @@ class PickCertScreen(Screen):
             Input(value=default, placeholder="/path/to/cert.p12", id="cert"),
             Horizontal(
                 Button("Next  [↵ Enter]", id="next", variant="primary"),
-                Button("Back", id="back"),
+                Button("← Back", id="back"),
             ),
             Static("", id="status"),
         )
@@ -525,7 +584,7 @@ class PasswordModal(ModalScreen):
 class ConfirmScreen(Screen):
     """Shows a summary, the pyhanko command(s) inline, and triggers signing."""
 
-    BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
+    BINDINGS = [*_BACK_LR]
 
     def __init__(self) -> None:
         super().__init__()
@@ -564,7 +623,7 @@ class ConfirmScreen(Screen):
             ),
             Horizontal(
                 Button("Sign", id="sign", variant="primary"),
-                Button("Back", id="back"),
+                Button("← Back", id="back"),
             ),
             Static(cmd_hint, id="cmd_hint"),
             RichLog(id="cmd_box", highlight=False, markup=False),
@@ -670,7 +729,11 @@ class ConfirmScreen(Screen):
 class SignResultScreen(Screen):
     """Shows per-file signing results with optional Okular open buttons."""
 
-    BINDINGS = [Binding("escape", "action_done", "Done"), *_LR]
+    BINDINGS = [
+        Binding("escape", "action_done", "Done", show=False),
+        Binding("ctrl+left", "action_done", "Done", show=False),
+        *_LR,
+    ]
 
     def __init__(self, results: List) -> None:
         super().__init__()
@@ -723,8 +786,9 @@ class SignResultScreen(Screen):
 
 class HelpScreen(Screen):
     BINDINGS = [
-        Binding("escape", "app.pop_screen", "Close"),
-        Binding("f1", "app.pop_screen", "Close"),
+        Binding("escape", "app.pop_screen", "Close", show=False),
+        Binding("f1", "app.pop_screen", "Close", show=False),
+        Binding("ctrl+left", "app.pop_screen", "Close", show=False),
         *_LR,
     ]
 
@@ -737,7 +801,7 @@ class HelpScreen(Screen):
                 "  Up / Down              — same as Tab / Shift+Tab\n"
                 "  Left / Right           — switch between side-by-side buttons\n"
                 "  Enter / Space          — activate focused button\n"
-                "  Escape                 — go back\n"
+                "  Escape / CTRL+←        — go back\n"
                 "  F1                     — show this help\n"
                 "  Ctrl+q                 — quit (from any screen)\n"
             ),
@@ -756,6 +820,7 @@ class HelpScreen(Screen):
 
 
 class SignPdfUiApp(App):
+    TITLE = f"signpdf-ui v{_version}"
     COMMANDS = frozenset()
     ENABLE_COMMAND_PALETTE = False  # removes "^p palette" from the footer
 
@@ -781,6 +846,9 @@ class SignPdfUiApp(App):
         height: 10;
         border: solid $primary;
     }
+    SelectFilesScreen #file_list {
+        height: 5;
+    }
     RichLog {
         height: 12;
         border: solid $accent;
@@ -801,6 +869,9 @@ class SignPdfUiApp(App):
     MainMenu #edit_ui {
         margin: 1 1 0 1;
     }
+    MainMenu #feedback {
+        margin: 1 1 0 1;
+    }
     MainMenu #quit {
         margin: 1 1 0 1;
     }
@@ -818,11 +889,13 @@ class SignPdfUiApp(App):
     BINDINGS = [
         Binding("ctrl+c", "app.quit", "Quit", show=False),
         Binding("ctrl+q", "quit", "Quit", key_display="CTRL+q"),
+        Binding("tab", "focus_next", "Next field", key_display="Tab"),
+        Binding("shift+tab", "focus_previous", "Prev field", key_display="Shift+Tab"),
         Binding("up", "focus_previous", show=False),
         Binding("down", "focus_next", show=False),
         Binding("left", "focus_previous", show=False),
         Binding("right", "focus_next", show=False),
-        Binding("f1", "show_help", "F1 Help"),
+        Binding("f1", "show_help", "Help", key_display="F1"),
     ]
 
     def __init__(self, initial_files: Optional[List[Path]] = None) -> None:
