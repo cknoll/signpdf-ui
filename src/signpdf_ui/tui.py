@@ -798,7 +798,8 @@ class SignResultScreen(Screen):
 
     @on(Button.Pressed, "#done")
     def action_done(self) -> None:
-        while len(self.app.screen_stack) > 1:
+        # screen_stack[0] is Textual's blank base Screen; [1] is MainMenu.
+        while len(self.app.screen_stack) > 2:
             self.app.pop_screen()
 
     @on(Button.Pressed)
