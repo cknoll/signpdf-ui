@@ -43,13 +43,13 @@ When started with a file or pattern, press **Alt+←** at any point to go back t
 
 Main menu entries:
 
-- **Sign PDF(s)** — four-step wizard: file/pattern → mode (existing field or page+bounding box) → field/rect → certificate → confirm & sign. The confirmation screen shows the exact `pyhanko sign addsig ...` command(s) inline, with a **Copy to clipboard** button.
+- **Sign PDF(s)** — four-step wizard: file/pattern → mode (existing signature field or custom area) → field/rect → certificate → confirm & sign. The confirmation screen shows the exact `pyhanko sign addsig ...` command(s) inline, with a **Copy to clipboard** button.
 - **Edit config for user interface** / **Edit config for backend (pyhanko)** — opens the respective YAML in `$VISUAL` / `$EDITOR` (or `xdg-open`).
 - **Quit (Ctrl+q)** — exits (also available from any screen).
 
 ### Defining the signature area visually with Okular
 
-When you choose **Geometry (page + bounding box)** mode, the UI automatically extracts any existing rect annotations from the file and lists them for you to pick. If none are present (or you want a new one):
+When you choose **"Place the signature in a custom area"**, the UI automatically extracts any existing rect annotations from the file and lists them for you to pick. If none are present (or you want a new one):
 
 1. Click **"Open copy in Okular to draw rect"**.
    A temporary copy of the PDF opens in Okular — the original file is never touched.
