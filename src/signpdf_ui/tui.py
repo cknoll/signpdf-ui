@@ -522,52 +522,6 @@ class PickCertScreen(Screen):
         self.app.push_screen(ConfirmScreen())
 
 
-class ShowCommandModal(ModalScreen):
-    """Modal that shows the pyhanko command(s) with a clipboard copy button."""
-
-    BINDINGS = [Binding("escape", "app.pop_screen", "Close"), *_LR]
-
-    def __init__(self, commands: List[List[str]]) -> None:
-        super().__init__()
-        self._commands = commands
-
-    def compose(self) -> ComposeResult:
-        text = "\n".join(shlex.join(cmd) for cmd in self._commands)
-        yield Vertical(
-            Static("[b]pyhanko command(s)[/b]\n"),
-            Static(text, id="cmd_text"),
-            Horizontal(
-                Button("Copy to clipboard", id="copy"),
-                Button("Close", id="close", variant="primary"),
-            ),
-            Static("", id="status"),
-            id="modal_inner",
-        )
-
-    @on(Button.Pressed, "#copy")
-    def _copy(self) -> None:
-        text = "\n".join(shlex.join(cmd) for cmd in self._commands)
-        # Try native clipboard tools before falling back to OSC 52 (not
-        # supported by all terminals, e.g. Konsole on KDE).
-        for args in (
-            ["wl-copy"],                           # Wayland
-            ["xclip", "-selection", "clipboard"],  # X11
-            ["xsel", "--clipboard", "--input"],    # X11 alternative
-        ):
-            try:
-                subprocess.run(args, input=text, text=True, check=True,
-                               capture_output=True, timeout=2)
-                self.query_one("#status", Static).update("Copied to clipboard.")
-                return
-            except (FileNotFoundError, subprocess.CalledProcessError,
-                    subprocess.TimeoutExpired):
-                continue
-        self.app.copy_to_clipboard(text)  # OSC 52 fallback
-        self.query_one("#status", Static).update("Copied to clipboard.")
-
-    @on(Button.Pressed, "#close")
-    def _close(self) -> None:
-        self.app.pop_screen()
 
 
 class WrongPasswordModal(ModalScreen):
@@ -639,9 +593,13 @@ class PasswordModal(ModalScreen):
 
 
 class ConfirmScreen(Screen):
-    """Shows a compact summary and lets the user inspect the command or sign."""
+    """Shows a summary, the pyhanko command(s) inline, and triggers signing."""
 
     BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._cmds: List[List[str]] = []
 
     def compose(self) -> ComposeResult:
         wiz: WizardState = self.app.wizard  # type: ignore[attr-defined]
@@ -650,39 +608,44 @@ class ConfirmScreen(Screen):
         files_preview = "\n".join(f"  • {f.name} → {core.output_path_for(f).name}" for f in wiz.files[:10])
         if len(wiz.files) > 10:
             files_preview += f"\n  … and {len(wiz.files) - 10} more"
+        n = len(wiz.files)
+        cmd_hint = (
+            "FYI: this command will be executed:"
+            if n == 1
+            else f"FYI: these {n} commands will be executed:"
+        )
         yield Header()
         yield Vertical(
             Static("[b]Confirm[/b]\n"),
             Static(
                 f"Mode:  {mode_str}\n"
                 f"Cert:  {cert_name}\n"
-                f"Files ({len(wiz.files)}):\n{files_preview}\n"
+                f"Files ({n}):\n{files_preview}\n"
             ),
             Horizontal(
-                Button("Show command", id="show"),
                 Button("Sign", id="sign", variant="primary"),
                 Button("Back", id="back"),
             ),
+            Static(cmd_hint, id="cmd_hint"),
+            RichLog(id="cmd_box", highlight=False, markup=False),
+            Button("Copy to clipboard", id="copy"),
             Static("", id="status"),
         )
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one("#sign", Button).focus()
-
-    @on(Button.Pressed, "#back")
-    def _back(self) -> None:
-        self.app.pop_screen()
-
-    @on(Button.Pressed, "#show")
-    def _show(self) -> None:
         cfg = _load_config_or_none()
+        log: RichLog = self.query_one("#cmd_box", RichLog)
         if cfg is None:
-            self.query_one("#status", Static).update("Config not found. Run `signpdf-ui --init` first.")
+            log.write("Config not found. Run `signpdf-ui --init` first.")
+            self.query_one("#sign", Button).disabled = True
+            self.query_one("#copy", Button).disabled = True
+            log.styles.height = 3
             return
         wiz: WizardState = self.app.wizard  # type: ignore[attr-defined]
-        cmds = [
-            core.build_sign_command(
+        for f in wiz.files:
+            cmd = core.build_sign_command(
                 input_file=f,
                 output_file=core.output_path_for(f),
                 field=wiz.field,
@@ -690,14 +653,38 @@ class ConfirmScreen(Screen):
                 pyhanko_config=cfg.pyhanko_config,
                 style_name=cfg.style_name,
             )
-            for f in wiz.files
-        ]
-        self.app.push_screen(ShowCommandModal(commands=cmds))
+            self._cmds.append(cmd)
+            log.write(shlex.join(cmd))
+        log.styles.height = min(len(self._cmds), 5) + 2  # +2 for top/bottom border
+
+    @on(Button.Pressed, "#back")
+    def _back(self) -> None:
+        self.app.pop_screen()
+
+    @on(Button.Pressed, "#copy")
+    def _copy(self) -> None:
+        if not self._cmds:
+            return
+        text = "\n".join(shlex.join(cmd) for cmd in self._cmds)
+        for args in (
+            ["wl-copy"],                           # Wayland
+            ["xclip", "-selection", "clipboard"],  # X11
+            ["xsel", "--clipboard", "--input"],    # X11 alternative
+        ):
+            try:
+                subprocess.run(args, input=text, text=True, check=True,
+                               capture_output=True, timeout=2)
+                self.query_one("#status", Static).update("Copied to clipboard.")
+                return
+            except (FileNotFoundError, subprocess.CalledProcessError,
+                    subprocess.TimeoutExpired):
+                continue
+        self.app.copy_to_clipboard(text)  # OSC 52 fallback
+        self.query_one("#status", Static).update("Copied to clipboard.")
 
     @on(Button.Pressed, "#sign")
     def _sign(self) -> None:
-        cfg = _load_config_or_none()
-        if cfg is None:
+        if not self._cmds:
             self.query_one("#status", Static).update("Config not found. Run `signpdf-ui --init` first.")
             return
         self.app.push_screen(PasswordModal(), callback=self._on_password)
@@ -870,6 +857,9 @@ class SignPdfUiApp(App):
     }
     .warning-title {
         color: $error;
+    }
+    ConfirmScreen #cmd_hint {
+        margin-top: 1;
     }
     WrongPasswordModal #modal_inner {
         border: solid $error;
