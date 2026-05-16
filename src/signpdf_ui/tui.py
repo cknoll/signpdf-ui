@@ -379,13 +379,13 @@ class PickGeometryScreen(Screen):
         yield Vertical(
             Static("[b]Step 3/4 — Signature placement[/b]\n"),
             Static("Format: PAGE/X1,Y1,X2,Y2/NAME — e.g. `1/189,578,356,615/X1`.\n"),
-            Label("Manually specify field:"),
+            Label("Manually specify field (or just use the default):"),
             Input(value="1/80,10,180,60/MY_CUSTOM_FIELD", id="field"),
             Button("Open copy in Okular to draw rect", id="okular_open"),
             Static("", id="rect_hint"),
             ListView(id="rects"),
             Horizontal(
-                Button("Use spec", id="use", variant="primary"),
+                Button("Use this area  [↵ Enter]", id="use", variant="primary"),
                 Button("Back (Alt+←)", id="back"),
             ),
             Static("", id="status"),
@@ -478,6 +478,7 @@ class PickGeometryScreen(Screen):
         self.query_one("#field", Input).value = f"1/{rect}/X1"
         self.query_one("#use", Button).focus()
 
+    @on(Input.Submitted, "#field")
     @on(Button.Pressed, "#use")
     def _use(self) -> None:
         spec = self.query_one("#field", Input).value.strip()
