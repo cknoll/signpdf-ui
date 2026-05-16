@@ -2,7 +2,7 @@ stamp-styles:
     my-signature:
         type: text
         # TODO: Change this, see pyhanko docs for syntax; \n is the newline character
-        stamp-text: "Firstname Lastname\n%(ts)s\nsigned using signpdf-ui + pyhanko"
+        stamp-text: "Firstname Lastname\n%(ts)s\nsigned using signpdf-ui + pyhanko\nplease customize visual appearance"
         # TODO: Adapt the watermark image: E.g. you can uncomment the "watermark-personalized.png"-line below and edit the image according do your needs.
         background: watermark.png
         # background: watermark-personalized.png

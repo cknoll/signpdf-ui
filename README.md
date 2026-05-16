@@ -53,12 +53,12 @@ When you choose **"Place the signature in a custom area"**, the UI automatically
 
 1. Click **"Open copy in Okular to draw rect"**.
    A temporary copy of the PDF opens in Okular — the original file is never touched.
-2. In Okular, select the **Rectangle annotation tool** (toolbar ▭ button, or *Insert → Rectangle*).
+2. In Okular, select the **Rectangle annotation tool** (1. Activate annotation toolbar from *Tools* menu or press (F6); 2. Select Rectangle (hidden inside the Arrow-dropdown) or press Alt + 0).
 3. Draw a rectangle over the desired signature area, **save** with **Ctrl+S**, then **close Okular**.
-   The UI reads the temp file automatically and imports the single new rectangle.
-4. Adjust the page number (first token) and field name (last token) of the pre-filled spec if needed, then proceed.
+   The UI reads the temp file automatically and imports the new rectangle.
+4. Adjust the page number (before the `/` character) if needed, then proceed.
 
-> **Note:** Save with **Ctrl+S** in Okular (not the sidecar `.okular` format). Draw exactly one rectangle — the UI will tell you if it finds none or more than one.
+> **Note:** Save with **Ctrl+S** in Okular (not the sidecar `.okular` format). Draw exactly one rectangle — the UI will complain otherwise.
 
 ### Non-interactive CLI
 

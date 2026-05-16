@@ -430,7 +430,9 @@ class PickGeometryScreen(Screen):
         self._okular_temp = Path(tmp_str)
         shutil.copy2(files[0], self._okular_temp)
         self.query_one("#status", Static).update(
-            "Okular opened. Draw ONE rectangle annotation (toolbar ▭ or Insert > Rectangle),\n"
+            "Okular opened. Draw ONE rectangle annotation\n"
+            "(1. Activate annotation toolbar from *Tools* menu or press (F6);\n"
+            "2. Select Rectangle (hidden inside the Arrow-dropdown) or press Alt + 0)\n"
             "save (Ctrl+S), then close Okular — the rect will be imported automatically."
         )
         self._run_okular()
