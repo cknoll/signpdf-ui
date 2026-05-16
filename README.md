@@ -4,6 +4,11 @@
 
 An interactive terminal UI (TUI) that wraps [pyhanko](https://github.com/MatthiasValvekens/pyHanko) so you can sign PDFs on Linux without memorizing flags.
 
+Advantages over Okular (which can also sign PDFs):
+
+- Easier setup (e.g. no Thunderbird needed)
+- Better customization of visual representation (text and watermark image)
+
 ## Install
 
 ```bash
