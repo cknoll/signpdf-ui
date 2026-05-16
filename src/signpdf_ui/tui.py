@@ -69,10 +69,10 @@ _LR = (
 )
 
 # Back navigation for screens that have a Back action.
-# ctrl+left mirrors escape so users can always reach it without leaving the keyboard home row.
+# alt+left mirrors browser back-navigation behaviour.
 _BACK_LR = (
     Binding("escape", "app.pop_screen", "Back", show=False),
-    Binding("ctrl+left", "app.pop_screen", "Back", show=False),
+    Binding("alt+left", "app.pop_screen", "Back", show=False),
     Binding("left", "app.focus_previous", show=False),
     Binding("right", "app.focus_next", show=False),
 )
@@ -94,7 +94,7 @@ class MainMenu(Screen):
             Button("Edit config for user interface", id="edit_ui"),
             Button("Edit config for backend (pyhanko)", id="edit_pyhanko"),
             Button("Send feedback", id="feedback"),
-            Button("Quit (CTRL+q)", id="quit"),
+            Button("Quit (Ctrl+q)", id="quit"),
             id="menu",
         )
         yield Footer()
@@ -155,7 +155,7 @@ class MessageScreen(Screen):
         yield Vertical(
             Static(f"[b]{self._title}[/b]\n"),
             Static(self._text),
-            Button("← Back", id="back"),
+            Button("Back (Alt+←)", id="back"),
         )
         yield Footer()
 
@@ -198,7 +198,7 @@ class SelectFilesScreen(Screen):
             Input(value=self._initial_pattern, placeholder="*.pdf", id="pattern"),
             Horizontal(
                 Button("Next  [↵ Enter]", id="next", variant="primary"),
-                Button("← Back", id="back"),
+                Button("Back (Alt+←)", id="back"),
             ),
             Static("", id="status"),
         )
@@ -280,7 +280,7 @@ class SelectModeScreen(Screen):
             Button("Use a signature field built into the PDF", id="mode_field", variant="primary"),
             Button("Place the signature in a custom area", id="mode_geom"),
 
-            Button("← Back", id="back"),
+            Button("Back (Alt+←)", id="back"),
         )
         yield Footer()
 
@@ -312,7 +312,7 @@ class PickFieldScreen(Screen):
             ListView(id="fields"),
             Horizontal(
                 Button("Sign at the selected field", id="use", variant="primary"),
-                Button("← Back", id="back"),
+                Button("Back (Alt+←)", id="back"),
             ),
         )
         yield Footer()
@@ -366,7 +366,7 @@ class PickGeometryScreen(Screen):
             ListView(id="rects"),
             Horizontal(
                 Button("Use spec", id="use", variant="primary"),
-                Button("← Back", id="back"),
+                Button("Back (Alt+←)", id="back"),
             ),
             Static("", id="status"),
         )
@@ -483,7 +483,7 @@ class PickCertScreen(Screen):
             Input(value=default, placeholder="/path/to/cert.p12", id="cert"),
             Horizontal(
                 Button("Next  [↵ Enter]", id="next", variant="primary"),
-                Button("← Back", id="back"),
+                Button("Back (Alt+←)", id="back"),
             ),
             Static("", id="status"),
         )
@@ -623,7 +623,7 @@ class ConfirmScreen(Screen):
             ),
             Horizontal(
                 Button("Sign", id="sign", variant="primary"),
-                Button("← Back", id="back"),
+                Button("Back (Alt+←)", id="back"),
             ),
             Static(cmd_hint, id="cmd_hint"),
             RichLog(id="cmd_box", highlight=False, markup=False),
@@ -731,7 +731,7 @@ class SignResultScreen(Screen):
 
     BINDINGS = [
         Binding("escape", "action_done", "Done", show=False),
-        Binding("ctrl+left", "action_done", "Done", show=False),
+        Binding("alt+left", "action_done", "Done", show=False),
         *_LR,
     ]
 
@@ -788,7 +788,7 @@ class HelpScreen(Screen):
     BINDINGS = [
         Binding("escape", "app.pop_screen", "Close", show=False),
         Binding("f1", "app.pop_screen", "Close", show=False),
-        Binding("ctrl+left", "app.pop_screen", "Close", show=False),
+        Binding("alt+left", "app.pop_screen", "Close", show=False),
         *_LR,
     ]
 
@@ -801,7 +801,7 @@ class HelpScreen(Screen):
                 "  Up / Down              — same as Tab / Shift+Tab\n"
                 "  Left / Right           — switch between side-by-side buttons\n"
                 "  Enter / Space          — activate focused button\n"
-                "  Escape / CTRL+←        — go back\n"
+                "  Escape / Alt+←          — go back\n"
                 "  F1                     — show this help\n"
                 "  Ctrl+q                 — quit (from any screen)\n"
             ),
@@ -888,7 +888,7 @@ class SignPdfUiApp(App):
 
     BINDINGS = [
         Binding("ctrl+c", "app.quit", "Quit", show=False),
-        Binding("ctrl+q", "quit", "Quit", key_display="CTRL+q"),
+        Binding("ctrl+q", "quit", "Quit", key_display="Ctrl+q"),
         Binding("tab", "focus_next", "Next field", key_display="Tab", priority=True),
         Binding("shift+tab", "focus_previous", "Prev field", key_display="Shift+Tab", priority=True),
         Binding("up", "focus_previous", show=False),
