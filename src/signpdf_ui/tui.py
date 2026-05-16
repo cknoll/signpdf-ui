@@ -577,7 +577,7 @@ class WrongPasswordModal(ModalScreen):
 
     def compose(self) -> ComposeResult:
         yield Vertical(
-            Static("[b]Wrong password[/b]\n", classes="warning-title"),
+            Static("[b]Wrong password![/b]\n", classes="warning-title"),
             Static("The PKCS#12 password was rejected.\nCheck your certificate password and try again."),
             Horizontal(
                 Button("Try again", id="retry", variant="primary"),
@@ -870,6 +870,12 @@ class SignPdfUiApp(App):
     }
     .warning-title {
         color: $error;
+    }
+    WrongPasswordModal #modal_inner {
+        border: solid $error;
+    }
+    WrongPasswordModal Horizontal {
+        margin-top: 1;
     }
     """
 
