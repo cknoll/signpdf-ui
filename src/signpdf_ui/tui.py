@@ -74,15 +74,15 @@ _LR = (
 
 
 class MainMenu(Screen):
-    BINDINGS = [Binding("q", "app.quit", "Quit"), *_LR]
+    BINDINGS = [*_LR]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         yield Vertical(
-            Static("signpdf-ui — sign PDFs through pyhanko\n", id="title"),
+            Static("Sign PDFs with a digital certificate (using pyhanko as backend)\n", id="title"),
             Button("Sign PDF(s)", id="sign", variant="primary"),
-            Button("Edit config (ui)", id="edit_ui"),
-            Button("Edit config (pyhanko)", id="edit_pyhanko"),
+            Button("Edit config for user interface", id="edit_ui"),
+            Button("Edit config for backend (pyhanko)", id="edit_pyhanko"),
             Button("Quit (CTRL+q)", id="quit"),
             id="menu",
         )
@@ -170,7 +170,8 @@ class SelectFilesScreen(Screen):
         yield Vertical(
             Static("[b]Step 1/4 — Select PDF(s)[/b]\n"),
             Static(f"Working directory: {Path.cwd()}\n"),
-            Label("Glob pattern or path (e.g. `demo-*.pdf` or `./form.pdf`):"),
+            Label("File name or pattern (e.g. report.pdf or *.pdf):"),
+            Static("Use * as a wildcard to select multiple files at once.\n"),
             Input(placeholder="*.pdf", id="pattern"),
             Horizontal(
                 Button("Next", id="next", variant="primary"),
@@ -212,8 +213,8 @@ class SelectModeScreen(Screen):
         yield Vertical(
             Static("[b]Step 2/4 — Choose signing mode[/b]\n"),
             Static(f"Files selected ({len(files)}):\n{preview}\n"),
-            Button("Existing signature field (form)", id="mode_field", variant="primary"),
-            Button("Geometry (page + bounding box)", id="mode_geom"),
+            Button("Use a signature field built into the PDF", id="mode_field", variant="primary"),
+            Button("Place the signature in a custom area", id="mode_geom"),
 
             Button("Back", id="back"),
         )
@@ -246,7 +247,7 @@ class PickFieldScreen(Screen):
             Static("", id="hint"),
             ListView(id="fields"),
             Horizontal(
-                Button("Use selected", id="use", variant="primary"),
+                Button("Sign at the selected field", id="use", variant="primary"),
                 Button("Back", id="back"),
             ),
         )
@@ -292,7 +293,7 @@ class PickGeometryScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header()
         yield Vertical(
-            Static("[b]Step 3/4 — Geometry[/b]\n"),
+            Static("[b]Step 3/4 — Signature placement[/b]\n"),
             Static("Format: PAGE/X1,Y1,X2,Y2/NAME — e.g. `1/189,578,356,615/X1`.\n"),
             Label("Manually specify field:"),
             Input(placeholder="1/189,578,356,615/X1", id="field"),
@@ -414,7 +415,7 @@ class PickCertScreen(Screen):
         yield Header()
         yield Vertical(
             Static("[b]Step 4/4 — Certificate[/b]\n"),
-            Label("PKCS#12 certificate file (.p12):"),
+            Label("Certificate file (.p12):"),
             Input(value=default, placeholder="/path/to/cert.p12", id="cert"),
             Horizontal(
                 Button("Next  [↵ Enter]", id="next", variant="primary"),
@@ -456,7 +457,7 @@ class WrongPasswordModal(ModalScreen):
     def compose(self) -> ComposeResult:
         yield Vertical(
             Static("[b]Wrong password![/b]\n", classes="warning-title"),
-            Static("The PKCS#12 password was rejected.\nCheck your certificate password and try again."),
+            Static("The certificate password was rejected.\nPlease check your password and try again."),
             Horizontal(
                 Button("Try again", id="retry", variant="primary"),
                 Button("Back", id="back"),
@@ -483,7 +484,7 @@ class PasswordModal(ModalScreen):
 
     def compose(self) -> ComposeResult:
         yield Vertical(
-            Static("[b]PKCS#12 password[/b]\n"),
+            Static("[b]Certificate password[/b]\n"),
             Input(password=True, placeholder="password", id="pw"),
             Horizontal(
                 Button("Sign  [↵ Enter]", id="submit", variant="primary"),
@@ -528,7 +529,16 @@ class ConfirmScreen(Screen):
     def compose(self) -> ComposeResult:
         wiz: WizardState = self.app.wizard  # type: ignore[attr-defined]
         cert_name = wiz.cert.name if wiz.cert else "(none)"
-        mode_str = f"{wiz.mode} ({wiz.field})"
+        if wiz.mode == "field":
+            signing_method = "Signature field in PDF"
+            location = wiz.field
+        else:
+            parts = wiz.field.split("/", 2)
+            signing_method = "Custom placement"
+            location = (
+                f"page {parts[0]}, area {parts[1]} (label: {parts[2]})"
+                if len(parts) == 3 else wiz.field
+            )
         files_preview = "\n".join(f"  • {f.name} → {core.output_path_for(f).name}" for f in wiz.files[:10])
         if len(wiz.files) > 10:
             files_preview += f"\n  … and {len(wiz.files) - 10} more"
@@ -542,8 +552,9 @@ class ConfirmScreen(Screen):
         yield Vertical(
             Static("[b]Confirm[/b]\n"),
             Static(
-                f"Mode:  {mode_str}\n"
-                f"Cert:  {cert_name}\n"
+                f"Signing method: {signing_method}\n"
+                f"Location:       {location}\n"
+                f"Certificate:    {cert_name}\n"
                 f"Files ({n}):\n{files_preview}\n"
             ),
             Horizontal(
@@ -723,7 +734,6 @@ class HelpScreen(Screen):
                 "  Enter / Space          — activate focused button\n"
                 "  Escape                 — go back\n"
                 "  F1                     — show this help\n"
-                "  q                      — quit (from main menu)\n"
                 "  Ctrl+q                 — quit (from any screen)\n"
             ),
             Button("Close", id="close"),
