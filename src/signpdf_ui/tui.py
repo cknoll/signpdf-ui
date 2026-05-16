@@ -889,8 +889,8 @@ class SignPdfUiApp(App):
     BINDINGS = [
         Binding("ctrl+c", "app.quit", "Quit", show=False),
         Binding("ctrl+q", "quit", "Quit", key_display="CTRL+q"),
-        Binding("tab", "focus_next", "Next field", key_display="Tab"),
-        Binding("shift+tab", "focus_previous", "Prev field", key_display="Shift+Tab"),
+        Binding("tab", "focus_next", "Next field", key_display="Tab", priority=True),
+        Binding("shift+tab", "focus_previous", "Prev field", key_display="Shift+Tab", priority=True),
         Binding("up", "focus_previous", show=False),
         Binding("down", "focus_next", show=False),
         Binding("left", "focus_previous", show=False),
