@@ -380,7 +380,7 @@ class PickGeometryScreen(Screen):
             Static("[b]Step 3/4 — Signature placement[/b]\n"),
             Static("Format: PAGE/X1,Y1,X2,Y2/NAME — e.g. `1/189,578,356,615/X1`.\n"),
             Label("Manually specify field:"),
-            Input(placeholder="1/189,578,356,615/X1", id="field"),
+            Input(value="1/80,10,180,60/MY_CUSTOM_FIELD", id="field"),
             Button("Open copy in Okular to draw rect", id="okular_open"),
             Static("", id="rect_hint"),
             ListView(id="rects"),
