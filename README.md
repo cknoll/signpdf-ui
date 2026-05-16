@@ -21,11 +21,26 @@ This copies the bundled configuration templates (`signpdf-ui.yml`, `pyhanko.yml`
 
 After this initialization you can run
 
+## Getting started
+Run
+
 ```bash
 signpdf-ui --demo
 ```
 
 to copy bundled demo PDFs to `/tmp/pdfsign-ui-demo-<timestamp>/` and print usage instructions.
+You can play around with those files and the bundled p12-certificate (password: `KXzolC-test-pw-s9Ckp7oZ`).
+I was created for this demonstration purpose only.
+
+
+## Customization
+
+To make pdfsign-ui` actually useful you have to customize it:
+
+- `pdfsign-ui` → button "Edit config for user interface" → insert the path for your certificate at `default_cert:`
+- `pdfsign-ui` → button "Edit config for backend (pyhanko)" → adapt the stamp text to your needs.
+- Optional: adapt the png watermark image at `$HOME/.config/signpdf-ui/watermark.png` or set a different one. This has great impact on the visual appearance of your signature.
+
 
 ## Usage
 
@@ -62,14 +77,7 @@ When you choose **"Place the signature in a custom area"**, the UI automatically
 
 ### Non-interactive CLI
 
-The two utility flags from the legacy bash script are preserved for scripting:
-
-```bash
-signpdf-ui --detect-fields FILE.pdf
-signpdf-ui --extract-rects FILE.pdf
-```
-
-For batch signing without the UI, use `pyhanko sign addsig` directly — the confirmation screen in the UI shows the exact invocation, which you can copy to the clipboard as a starting point.
+For (batch) signing without the UI, use `pyhanko sign addsig` directly — the confirmation screen in the UI shows the exact invocation, which you can copy to the clipboard as a starting point.
 
 ## Configuration
 
