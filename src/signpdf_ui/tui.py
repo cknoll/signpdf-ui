@@ -207,6 +207,20 @@ class SelectFilesScreen(Screen):
     def on_mount(self) -> None:
         self._refresh_file_list(set_focus=True)
 
+    def on_screen_resume(self) -> None:
+        # Restore cursor and focus without re-scanning.  When all wizard screens
+        # are pushed synchronously in App.on_mount, lv.index can be left at None
+        # because ListView.extend() sets index=0 only if len(self)==1 at the
+        # moment mount() is called — but that check races with the pending
+        # AwaitRemove from a prior lv.clear().
+        lv: ListView = self.query_one("#file_list", ListView)
+        if self._found_files:
+            if lv.index is None:
+                lv.index = 0
+            lv.focus()
+        else:
+            self.query_one("#pattern", Input).focus()
+
     def _refresh_file_list(self, set_focus: bool = False) -> None:
         pattern = self.query_one("#pattern", Input).value.strip() or "*.pdf"
         self._found_files = core.expand_pdf_patterns([pattern])

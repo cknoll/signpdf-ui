@@ -20,7 +20,7 @@ from textual.widgets import Button
 from unittest.mock import patch
 
 from signpdf_ui import core, paths
-from signpdf_ui.tui import ConfirmScreen, PickGeometryScreen, SelectFilesScreen, SignPdfUiApp
+from signpdf_ui.tui import ConfirmScreen, PickGeometryScreen, SelectFilesScreen, SelectModeScreen, SignPdfUiApp
 
 
 class TestPickGeometryWorker(unittest.TestCase):
@@ -89,6 +89,42 @@ class TestSelectFilesScreen(unittest.IsolatedAsyncioTestCase):
                     "Input must contain a path from the file list after pressing ↓",
                 )
                 self.assertNotEqual(before, after, "Input should change when list highlight moves")
+
+
+class TestSelectFilesScreenResume(unittest.IsolatedAsyncioTestCase):
+    """Tests for SelectFilesScreen behaviour after returning from a deeper screen."""
+
+    async def test_enter_after_back_from_step2_advances(self):
+        """Going back from step 2 to step 1 and pressing Enter must advance to step 2 again.
+
+        Bug: when the app starts with initial_files, all wizard screens are pushed
+        synchronously in App.on_mount, so SelectFilesScreen was never the active
+        screen.  lv.index could be None and focus could be wrong, causing Enter to
+        silently do nothing or show an error instead of advancing.
+        """
+        fixture = paths.fixture_path("demo-form-with-sign-fields.pdf")
+        app = SignPdfUiApp(initial_files=[fixture])
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            await pilot.pause()
+            # App opens directly on step 2
+            self.assertIsInstance(app.screen, SelectModeScreen)
+
+            # Navigate back to step 1
+            await pilot.press("alt+left")
+            await pilot.pause()
+            await pilot.pause()
+            self.assertIsInstance(app.screen, SelectFilesScreen)
+
+            # Press Enter — must advance back to step 2
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.pause()
+            self.assertIsInstance(
+                app.screen,
+                SelectModeScreen,
+                "Enter on SelectFilesScreen after returning from step 2 must push SelectModeScreen",
+            )
 
 
 class TestMainMenuLayout(unittest.IsolatedAsyncioTestCase):
