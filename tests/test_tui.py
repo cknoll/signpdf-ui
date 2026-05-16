@@ -15,6 +15,8 @@ from textual.app import App
 from textual.screen import Screen
 from textual.widgets import RichLog
 
+from textual.widgets import Button
+
 from signpdf_ui import core, paths
 from signpdf_ui.tui import ConfirmScreen, PickGeometryScreen, SignPdfUiApp
 
@@ -49,6 +51,25 @@ def _make_app(cfg, n_files: int) -> SignPdfUiApp:
     app.wizard.field = "Person1"
     app.wizard.mode = "field"
     return app
+
+
+class TestMainMenuLayout(unittest.IsolatedAsyncioTestCase):
+    """Headless pilot tests for the main menu layout."""
+
+    async def test_all_buttons_same_width(self):
+        """All buttons in the main menu must have the same width."""
+        app = SignPdfUiApp()
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            buttons = list(app.query("#menu Button").results(Button))
+            self.assertGreater(len(buttons), 1, "Expected multiple buttons in #menu")
+            widths = [b.size.width for b in buttons]
+            self.assertEqual(
+                len(set(widths)),
+                1,
+                f"Main menu buttons have different widths: "
+                f"{[(b.id, w) for b, w in zip(buttons, widths)]}",
+            )
 
 
 class TestConfirmScreenLayout(unittest.IsolatedAsyncioTestCase):
