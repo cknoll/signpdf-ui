@@ -28,6 +28,7 @@ FIXTURE_PDF_FILENAMES = (
     "demo-form-with-sign-fields.pdf",
 )
 FIXTURE_P12_FILENAME = "test_identity.p12"
+FIXTURE_P12_PASSWORD = "KXzolC-test-pw-s9Ckp7oZ"
 
 
 def user_config_dir() -> Path:

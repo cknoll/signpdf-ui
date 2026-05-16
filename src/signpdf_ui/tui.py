@@ -13,6 +13,7 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import List, Optional
 
@@ -59,6 +60,11 @@ def _load_config_or_none():
         return core.load_ui_config()
     except FileNotFoundError:
         return None
+
+
+def _is_demo_file(path: Path) -> bool:
+    """True when path looks like a file copied by --demo (auto-fill password)."""
+    return fnmatch(str(path), "/tmp/pdfsign-ui-demo-*/demo*.pdf")
 
 
 # Lateral focus navigation reused by every screen/modal with side-by-side buttons.
@@ -560,9 +566,18 @@ class PasswordModal(ModalScreen):
 
     BINDINGS = [*_LR]
 
+    def __init__(self, is_demo: bool = False) -> None:
+        super().__init__()
+        self._is_demo = is_demo
+
     def compose(self) -> ComposeResult:
+        title = (
+            "[b]Certificate password[/b]\n(demo file detected — password auto-filled)\n"
+            if self._is_demo
+            else "[b]Certificate password[/b]\n"
+        )
         yield Vertical(
-            Static("[b]Certificate password[/b]\n"),
+            Static(title),
             Input(password=True, placeholder="password", id="pw"),
             Horizontal(
                 Button("Sign  [↵ Enter]", id="submit", variant="primary"),
@@ -573,7 +588,10 @@ class PasswordModal(ModalScreen):
         )
 
     def on_mount(self) -> None:
-        self.query_one("#pw", Input).focus()
+        pw = self.query_one("#pw", Input)
+        if self._is_demo:
+            pw.value = paths.FIXTURE_P12_PASSWORD
+        pw.focus()
 
     @on(Input.Submitted, "#pw")
     def _enter(self, _event: Input.Submitted) -> None:
@@ -700,7 +718,9 @@ class ConfirmScreen(Screen):
         if not self._cmds:
             self.query_one("#status", Static).update("Config not found. Run `signpdf-ui --init` first.")
             return
-        self.app.push_screen(PasswordModal(), callback=self._on_password)
+        wiz: WizardState = self.app.wizard  # type: ignore[attr-defined]
+        is_demo = bool(wiz.files) and _is_demo_file(wiz.files[0])
+        self.app.push_screen(PasswordModal(is_demo=is_demo), callback=self._on_password)
 
     def _on_password(self, password: Optional[str]) -> None:
         if password is None:
