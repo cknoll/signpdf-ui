@@ -165,6 +165,10 @@ class WizardState:
 class SelectFilesScreen(Screen):
     BINDINGS = [Binding("escape", "app.pop_screen", "Back"), *_LR]
 
+    def __init__(self, initial_pattern: str = "") -> None:
+        super().__init__()
+        self._initial_pattern = initial_pattern
+
     def compose(self) -> ComposeResult:
         yield Header()
         yield Vertical(
@@ -172,9 +176,9 @@ class SelectFilesScreen(Screen):
             Static(f"Working directory: {Path.cwd()}\n"),
             Label("File name or pattern (e.g. report.pdf or *.pdf):"),
             Static("Use * as a wildcard to select multiple files at once.\n"),
-            Input(placeholder="*.pdf", id="pattern"),
+            Input(value=self._initial_pattern, placeholder="*.pdf", id="pattern"),
             Horizontal(
-                Button("Next", id="next", variant="primary"),
+                Button("Next  [↵ Enter]", id="next", variant="primary"),
                 Button("Back", id="back"),
             ),
             Static("", id="status"),
@@ -185,6 +189,7 @@ class SelectFilesScreen(Screen):
     def _back(self) -> None:
         self.app.pop_screen()
 
+    @on(Input.Submitted, "#pattern")
     @on(Button.Pressed, "#next")
     def _next(self) -> None:
         pattern = self.query_one("#pattern", Input).value.strip()
@@ -829,6 +834,7 @@ class SignPdfUiApp(App):
         self.push_screen(MainMenu())
         if self._initial_files:
             self.wizard.files = self._initial_files
+            self.push_screen(SelectFilesScreen(initial_pattern=str(self._initial_files[0])))
             self.push_screen(SelectModeScreen())
 
     def action_show_help(self) -> None:
