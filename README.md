@@ -39,25 +39,13 @@ Three ways to launch the wizard:
 | `signpdf-ui FILE.pdf` | You already know the file — opens directly at step 2 (mode selection). |
 | `signpdf-ui "docs/*.pdf"` | Multiple files matching a glob — opens at step 2 with all matches pre-loaded. |
 
-**`signpdf-ui`** (bare)
-
-Launches the wizard at the main menu. In step 1 you type a file path or glob pattern (e.g. `*.pdf`) — the list updates live as you type. Selecting an entry or pressing Enter advances to step 2.
-
-**`signpdf-ui FILE.pdf`**
-
-Loads the given file immediately and skips to step 2 (mode selection). Pressing **Alt+←** at any point goes back to step 1, where the file path is already filled in.
-
-**`signpdf-ui "docs/*.pdf"`**
-
-Expands the glob and loads all matching PDFs as a batch; all will be signed with the same settings. Opens directly at step 2.
+When started with a file or pattern, press **Alt+←** at any point to go back to step 1 (file path pre-filled).
 
 Main menu entries:
 
-- **Sign PDF(s)** — walks you through four steps: file/pattern → mode (existing signature field or page+bounding box) → field/rect → certificate → confirmation. The confirmation screen shows the exact `pyhanko sign addsig ...` command(s) inline for full transparency, with a **Copy to clipboard** button.
+- **Sign PDF(s)** — four-step wizard: file/pattern → mode (existing field or page+bounding box) → field/rect → certificate → confirm & sign. The confirmation screen shows the exact `pyhanko sign addsig ...` command(s) inline, with a **Copy to clipboard** button.
 - **Edit config for user interface** / **Edit config for backend (pyhanko)** — opens the respective YAML in `$VISUAL` / `$EDITOR` (or `xdg-open`).
-- **Quit (Ctrl+q)** — exits (also available from any screen via the keyboard shortcut).
-
-You are prompted for the PKCS#12 password via a modal dialog before signing. If the password is rejected a **Wrong password** modal appears with options to try again or go back.
+- **Quit (Ctrl+q)** — exits (also available from any screen).
 
 ### Defining the signature area visually with Okular
 
@@ -70,9 +58,7 @@ When you choose **Geometry (page + bounding box)** mode, the UI automatically ex
    The UI reads the temp file automatically and imports the single new rectangle.
 4. Adjust the page number (first token) and field name (last token) of the pre-filled spec if needed, then proceed.
 
-If you accidentally draw more than one rectangle the UI tells you and lets you try again.
-
-> **Note:** Okular must be configured to embed annotations into the PDF file (the default when saving with Ctrl+S, as opposed to keeping a sidecar `.okular` file). The signature is applied to the *original* file; the temporary Okular copy is only used to capture the rectangle coordinates.
+> **Note:** Save with **Ctrl+S** in Okular (not the sidecar `.okular` format). Draw exactly one rectangle — the UI will tell you if it finds none or more than one.
 
 ### Non-interactive CLI
 
