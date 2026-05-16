@@ -1,14 +1,22 @@
 """
-Unit tests for TUI-specific behaviour that does not require a running Textual app.
+Unit tests for TUI-specific behaviour.
+
+TestPickGeometryWorker: static checks, no running app needed.
+TestConfirmScreenLayout: headless Textual pilot tests for visual layout.
 """
 
 import inspect
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 from textual.app import App
 from textual.screen import Screen
+from textual.widgets import RichLog
 
-from signpdf_ui.tui import PickGeometryScreen
+from signpdf_ui import core, paths
+from signpdf_ui.tui import ConfirmScreen, PickGeometryScreen, SignPdfUiApp
 
 
 class TestPickGeometryWorker(unittest.TestCase):
@@ -31,6 +39,64 @@ class TestPickGeometryWorker(unittest.TestCase):
             "(Screen inherits from Widget, not App).",
         )
         self.assertIn("self.app.call_from_thread", source)
+
+
+def _make_app(cfg, n_files: int) -> SignPdfUiApp:
+    """Return a SignPdfUiApp with wizard state pre-filled for n_files."""
+    app = SignPdfUiApp()
+    app.wizard.files = [paths.fixture_path("demo-form-with-sign-fields.pdf")] * n_files
+    app.wizard.cert = paths.fixture_path("test_identity.p12")
+    app.wizard.field = "Person1"
+    app.wizard.mode = "field"
+    return app
+
+
+class TestConfirmScreenLayout(unittest.IsolatedAsyncioTestCase):
+    """Headless pilot tests that catch visual layout regressions."""
+
+    def setUp(self):
+        tmp = Path(tempfile.mkdtemp())
+        core.init_config(target_dir=tmp)
+        self._cfg = core.load_ui_config(tmp / "signpdf-ui.yml")
+
+    async def test_cmd_box_visible_for_single_file(self):
+        """RichLog must have at least 1 visible content row for n=1.
+
+        With a horizontal scrollbar present, the widget needs height >= 4:
+          1 (top border) + 1 (content) + 1 (h-scrollbar) + 1 (bottom border).
+        The bug was min(1,5)+2 = 3, leaving scrollable_content_region.height=0.
+        """
+        app = _make_app(self._cfg, n_files=1)
+        with patch("signpdf_ui.tui._load_config_or_none", return_value=self._cfg):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await app.push_screen(ConfirmScreen())
+                await pilot.pause()
+                await pilot.pause()
+                log = app.query_one("#cmd_box", RichLog)
+                visible_rows = log.scrollable_content_region.height
+                self.assertGreater(
+                    visible_rows,
+                    0,
+                    f"Command not visible: scrollable_content_region.height={visible_rows}, "
+                    f"outer height={log.outer_size.height}. "
+                    "Horizontal scrollbar is consuming the only content row.",
+                )
+
+    async def test_cmd_box_visible_for_multiple_files(self):
+        """RichLog must show content for n=3 (below the cap of 5)."""
+        app = _make_app(self._cfg, n_files=3)
+        with patch("signpdf_ui.tui._load_config_or_none", return_value=self._cfg):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await app.push_screen(ConfirmScreen())
+                await pilot.pause()
+                await pilot.pause()
+                log = app.query_one("#cmd_box", RichLog)
+                self.assertGreater(
+                    log.scrollable_content_region.height,
+                    0,
+                    f"Commands not visible for n=3: "
+                    f"scrollable_content_region.height={log.scrollable_content_region.height}",
+                )
 
 
 if __name__ == "__main__":
