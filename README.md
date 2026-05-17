@@ -63,10 +63,15 @@ Three ways to launch the wizard:
 
 When started with a file or pattern, press **Alt+←** at any point to go back to step 1 (file path pre-filled).
 
+
+![screenshot: signpdf-ui main menu](docs/img/screenshot1.png)
+
+
 Main menu entries:
 
 - **Sign PDF(s)** — four-step wizard: file/pattern → mode (existing signature field or custom area) → field/rect → certificate → confirm & sign. The confirmation screen shows the exact `pyhanko sign addsig ...` command(s) inline, with a **Copy to clipboard** button.
-- **Edit config for user interface** / **Edit config for backend (pyhanko)** — opens the respective YAML in `$VISUAL` / `$EDITOR` (or `xdg-open`).
+- **Edit config for user interface** / **Edit config for backend (pyhanko)** — opens the respective YAML file in `$VISUAL` / `$EDITOR` (or `xdg-open`).
+- **Send feedback** — not yet implemented.
 - **Quit (Ctrl+q)** — exits (also available from any screen).
 
 ### Defining the signature area visually with Okular
