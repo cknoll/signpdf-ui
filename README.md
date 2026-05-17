@@ -12,7 +12,7 @@ Advantages over Okular (which can also sign PDFs):
 ## Install
 
 ```bash
-pip install .
+pip install signpdf-ui
 ```
 
 After installing, run the one-time setup once:
@@ -40,11 +40,13 @@ I was created for this demonstration purpose only.
 
 ## Customization
 
-To make pdfsign-ui` actually useful you have to customize it:
+To make pdfsign-ui actually useful you have to customize it:
 
-- `pdfsign-ui` → button "Edit config for user interface" → insert the path for your certificate at `default_cert:`
-- `pdfsign-ui` → button "Edit config for backend (pyhanko)" → adapt the stamp text to your needs.
-- Optional: adapt the png watermark image at `$HOME/.config/signpdf-ui/watermark.png` or set a different one. This has great impact on the visual appearance of your signature.
+- 1. `pdfsign-ui` → button "Edit config for user interface" → insert the path for your p12 certificate at `default_cert: ...`.
+- 2. `pdfsign-ui` → button "Edit config for backend (pyhanko)" → adapt the stamp text to your needs.
+- 3. (optional) Adapt the png watermark image at `$HOME/.config/signpdf-ui/watermark.png` or set a different one. This has great impact on the visual appearance of your signature.
+
+Test your setup with the demo PDF-files.
 
 
 ## Usage
