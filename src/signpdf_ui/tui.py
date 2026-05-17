@@ -8,11 +8,13 @@ with password prompt. Two menu entries open the config files in $EDITOR.
 
 from __future__ import annotations
 
+import json
 import os
 import shlex
 import shutil
 import subprocess
 import tempfile
+import urllib.request
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import List, Optional
@@ -24,6 +26,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
 from textual.widgets import (
     Button,
+    Checkbox,
     Footer,
     Header,
     Input,
@@ -32,10 +35,14 @@ from textual.widgets import (
     ListView,
     RichLog,
     Static,
+    TextArea,
 )
 
 from . import core, paths
 from .release import __version__ as _version
+
+# Update this once the Flask receiver is deployed.
+FEEDBACK_URL = "https://api.YOURDOMAIN.uberspace.de/feedback/signpdf-ui"
 
 
 # ---------------------------------------------------------------------------
@@ -53,6 +60,17 @@ def _open_in_editor(file_path: Path, editor_override: Optional[str] = None) -> N
         or "xdg-open"
     )
     subprocess.run([*shlex.split(editor), str(file_path)])
+
+
+def _send_feedback(payload: dict) -> None:
+    data = json.dumps(payload).encode()
+    req = urllib.request.Request(
+        FEEDBACK_URL,
+        data=data,
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        resp.read()
 
 
 def _load_config_or_none():
@@ -136,7 +154,7 @@ class MainMenu(Screen):
 
     @on(Button.Pressed, "#feedback")
     def _feedback(self) -> None:
-        pass  # placeholder — not yet implemented
+        self.app.push_screen(FeedbackModal())
 
     @on(Button.Pressed, "#quit")
     def _quit(self) -> None:
@@ -537,6 +555,74 @@ class PickCertScreen(Screen):
 
 
 
+class FeedbackModal(ModalScreen):
+    """Modal for sending anonymous feedback to the developer."""
+
+    BINDINGS = [*_LR]
+
+    def compose(self) -> ComposeResult:
+        yield Vertical(
+            Static("[b]Send feedback[/b]\n"),
+            Static(
+                "Anonymous — no personal data is sent unless you include it in your message.\n",
+                classes="feedback-hint",
+            ),
+            TextArea(id="message"),
+            Checkbox(f"Include version info (signpdf-ui v{_version})", value=True, id="include_version"),
+            Horizontal(
+                Button("Send", id="send", variant="primary"),
+                Button("Cancel", id="cancel"),
+            ),
+            Static("", id="status"),
+            id="modal_inner",
+        )
+
+    def on_mount(self) -> None:
+        self.query_one("#message", TextArea).focus()
+
+    @on(Button.Pressed, "#cancel")
+    def _cancel(self) -> None:
+        self.dismiss()
+
+    @on(Button.Pressed, "#send")
+    def _send(self) -> None:
+        if "YOURDOMAIN" in FEEDBACK_URL:
+            self.query_one("#status", Static).update(
+                "Feedback not configured yet — please open a GitHub issue instead."
+            )
+            return
+        message = self.query_one("#message", TextArea).text.strip()
+        if not message:
+            self.query_one("#status", Static).update("Please enter a message.")
+            return
+        payload: dict = {"message": message}
+        if self.query_one("#include_version", Checkbox).value:
+            payload["app"] = "signpdf-ui"
+            payload["version"] = _version
+        self.query_one("#send", Button).disabled = True
+        self.query_one("#cancel", Button).disabled = True
+        self.query_one("#status", Static).update("Sending…")
+        self._post(payload)
+
+    @work(thread=True)
+    def _post(self, payload: dict) -> None:
+        try:
+            _send_feedback(payload)
+            self.app.call_from_thread(self._on_success)
+        except Exception as exc:
+            self.app.call_from_thread(self._on_error, str(exc))
+
+    def _on_success(self) -> None:
+        self.query_one("#status", Static).update("Sent — thank you!")
+        self.query_one("#cancel", Button).disabled = False
+        self.query_one("#cancel", Button).label = "Close"
+
+    def _on_error(self, msg: str) -> None:
+        self.query_one("#status", Static).update(f"Could not send: {msg}")
+        self.query_one("#send", Button).disabled = False
+        self.query_one("#cancel", Button).disabled = False
+
+
 class WrongPasswordModal(ModalScreen):
     """Shown when pyhanko rejects the PKCS#12 password."""
 
@@ -922,6 +1008,16 @@ class SignPdfUiApp(App):
     }
     WrongPasswordModal Horizontal {
         margin-top: 1;
+    }
+    FeedbackModal TextArea {
+        height: 8;
+        margin-bottom: 1;
+    }
+    FeedbackModal Checkbox {
+        margin-bottom: 1;
+    }
+    .feedback-hint {
+        color: $text-muted;
     }
     """
 
