@@ -13,14 +13,19 @@ from unittest.mock import patch
 
 from textual.app import App
 from textual.screen import Screen
-from textual.widgets import Button, Input, ListView, RichLog
-
-from textual.widgets import Button
+from textual.widgets import Button, Checkbox, Input, ListView, RichLog, TextArea
 
 from unittest.mock import patch
 
 from signpdf_ui import core, paths
-from signpdf_ui.tui import ConfirmScreen, PickGeometryScreen, SelectFilesScreen, SelectModeScreen, SignPdfUiApp
+from signpdf_ui.tui import (
+    ConfirmScreen,
+    FeedbackModal,
+    PickGeometryScreen,
+    SelectFilesScreen,
+    SelectModeScreen,
+    SignPdfUiApp,
+)
 
 
 class TestPickGeometryWorker(unittest.TestCase):
@@ -192,6 +197,61 @@ class TestConfirmScreenLayout(unittest.IsolatedAsyncioTestCase):
                     f"Commands not visible for n=3: "
                     f"scrollable_content_region.height={log.scrollable_content_region.height}",
                 )
+
+
+class TestFeedbackModal(unittest.IsolatedAsyncioTestCase):
+    """Tests for the FeedbackModal consent gate and send behaviour."""
+
+    async def test_send_disabled_without_consent(self):
+        """Send button must be disabled before the consent checkbox is checked."""
+        app = SignPdfUiApp()
+        async with app.run_test(size=(120, 40)) as pilot:
+            await app.push_screen(FeedbackModal())
+            await pilot.pause()
+            send_btn = app.screen.query_one("#send", Button)
+            self.assertTrue(send_btn.disabled, "Send must be disabled before consent is given")
+
+    async def test_send_enabled_after_consent(self):
+        """Checking the consent checkbox must enable the Send button."""
+        app = SignPdfUiApp()
+        async with app.run_test(size=(120, 40)) as pilot:
+            await app.push_screen(FeedbackModal())
+            await pilot.pause()
+            await pilot.click("#consent")
+            await pilot.pause()
+            send_btn = app.screen.query_one("#send", Button)
+            self.assertFalse(send_btn.disabled, "Send must be enabled after consent is given")
+
+    async def test_feedback_sent_only_with_consent(self):
+        """_send_feedback is called when consent is given, not before."""
+        app = SignPdfUiApp()
+        with (
+            patch("signpdf_ui.tui.FEEDBACK_URL", "https://test.example.com/feedback/signpdf-ui"),
+            patch("signpdf_ui.tui._send_feedback") as mock_send,
+        ):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await app.push_screen(FeedbackModal())
+                await pilot.pause()
+
+                # Set a message directly on the TextArea
+                app.screen.query_one("#message", TextArea).load_text("Test feedback message")
+                await pilot.pause()
+
+                # Send is disabled — clicking must not call _send_feedback
+                await pilot.click("#send")
+                await pilot.pause()
+                mock_send.assert_not_called()
+
+                # Give consent → Send becomes enabled → click → feedback is sent
+                await pilot.click("#consent")
+                await pilot.pause()
+                await pilot.click("#send")
+                await pilot.pause()
+                await pilot.pause()  # wait for worker thread callback
+
+                mock_send.assert_called_once()
+                payload = mock_send.call_args[0][0]
+                self.assertEqual(payload["message"], "Test feedback message")
 
 
 if __name__ == "__main__":

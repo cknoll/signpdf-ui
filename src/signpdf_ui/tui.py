@@ -578,12 +578,10 @@ class PickCertScreen(Screen):
 class FeedbackModal(ModalScreen):
     """Modal for sending feedback to the developer."""
 
-    BINDINGS = [*_LR]
-
-    _CONSENT_TEXT = (
-        "I agree that the provided information from this message is stored and processed "
-        "on third party servers. It will only be used for improving this application."
-    )
+    BINDINGS = [
+        *_LR,
+        Binding("ctrl+q", "request_quit", show=False),
+    ]
 
     def compose(self) -> ComposeResult:
         yield Vertical(
@@ -596,7 +594,11 @@ class FeedbackModal(ModalScreen):
             Label("Your email (optional):"),
             Input(placeholder="you@example.com", id="email"),
             Checkbox(f"Include version info (signpdf-ui v{_version})", value=True, id="include_version"),
-            Checkbox(self._CONSENT_TEXT, value=False, id="consent"),
+            Static(
+                "Submitted data is stored on third-party servers and used only to improve this app.",
+                classes="feedback-hint",
+            ),
+            Checkbox("I agree to storage and processing of the above data.", value=False, id="consent"),
             Horizontal(
                 Button("Send", id="send", variant="primary", disabled=True),
                 Button("Cancel", id="cancel"),
@@ -606,7 +608,18 @@ class FeedbackModal(ModalScreen):
         )
 
     def on_mount(self) -> None:
+        self._confirm_quit = False
         self.query_one("#message", TextArea).focus()
+
+    def action_request_quit(self) -> None:
+        message = self.query_one("#message", TextArea).text.strip()
+        if message and not self._confirm_quit:
+            self._confirm_quit = True
+            self.query_one("#status", Static).update(
+                "Message not sent. Press Ctrl+q again to quit."
+            )
+            return
+        self.app.exit()
 
     @on(Checkbox.Changed, "#consent")
     def _consent_changed(self, event: Checkbox.Changed) -> None:
