@@ -8,6 +8,7 @@ with password prompt. Two menu entries open the config files in $EDITOR.
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import shlex
@@ -71,6 +72,25 @@ def _send_feedback(payload: dict) -> None:
     )
     with urllib.request.urlopen(req, timeout=10) as resp:
         resp.read()
+
+
+def _save_feedback_locally(payload: dict) -> Path:
+    ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    filename = f"signpdf-ui-feedback-message-{ts}.txt"
+    lines = ["message:", payload.get("message", ""), ""]
+    if payload.get("email"):
+        lines += ["email:", payload["email"], ""]
+    if payload.get("version"):
+        lines += [f"app: signpdf-ui v{payload['version']}", ""]
+    content = "\n".join(lines)
+    for directory in (Path.cwd(), Path(tempfile.gettempdir())):
+        try:
+            path = directory / filename
+            path.write_text(content, encoding="utf-8")
+            return path
+        except OSError:
+            continue
+    raise OSError("Could not write feedback to cwd or tmpdir")
 
 
 def _load_config_or_none():
@@ -556,21 +576,29 @@ class PickCertScreen(Screen):
 
 
 class FeedbackModal(ModalScreen):
-    """Modal for sending anonymous feedback to the developer."""
+    """Modal for sending feedback to the developer."""
 
     BINDINGS = [*_LR]
+
+    _CONSENT_TEXT = (
+        "I agree that the provided information from this message is stored and processed "
+        "on third party servers. It will only be used for improving this application."
+    )
 
     def compose(self) -> ComposeResult:
         yield Vertical(
             Static("[b]Send feedback[/b]\n"),
             Static(
-                "Anonymous — no personal data is sent unless you include it in your message.\n",
+                "No personal data is sent unless you include it below.\n",
                 classes="feedback-hint",
             ),
             TextArea(id="message"),
+            Label("Your email (optional):"),
+            Input(placeholder="you@example.com", id="email"),
             Checkbox(f"Include version info (signpdf-ui v{_version})", value=True, id="include_version"),
+            Checkbox(self._CONSENT_TEXT, value=False, id="consent"),
             Horizontal(
-                Button("Send", id="send", variant="primary"),
+                Button("Send", id="send", variant="primary", disabled=True),
                 Button("Cancel", id="cancel"),
             ),
             Static("", id="status"),
@@ -579,6 +607,10 @@ class FeedbackModal(ModalScreen):
 
     def on_mount(self) -> None:
         self.query_one("#message", TextArea).focus()
+
+    @on(Checkbox.Changed, "#consent")
+    def _consent_changed(self, event: Checkbox.Changed) -> None:
+        self.query_one("#send", Button).disabled = not event.value
 
     @on(Button.Pressed, "#cancel")
     def _cancel(self) -> None:
@@ -596,6 +628,9 @@ class FeedbackModal(ModalScreen):
             self.query_one("#status", Static).update("Please enter a message.")
             return
         payload: dict = {"message": message}
+        email = self.query_one("#email", Input).value.strip()
+        if email:
+            payload["email"] = email
         if self.query_one("#include_version", Checkbox).value:
             payload["app"] = "signpdf-ui"
             payload["version"] = _version
@@ -610,15 +645,20 @@ class FeedbackModal(ModalScreen):
             _send_feedback(payload)
             self.app.call_from_thread(self._on_success)
         except Exception as exc:
-            self.app.call_from_thread(self._on_error, str(exc))
+            self.app.call_from_thread(self._on_error, payload, str(exc))
 
     def _on_success(self) -> None:
         self.query_one("#status", Static).update("Sent — thank you!")
         self.query_one("#cancel", Button).disabled = False
         self.query_one("#cancel", Button).label = "Close"
 
-    def _on_error(self, msg: str) -> None:
-        self.query_one("#status", Static).update(f"Could not send: {msg}")
+    def _on_error(self, payload: dict, msg: str) -> None:
+        try:
+            saved = _save_feedback_locally(payload)
+            status = f"Could not send: {msg}\nSaved locally: {saved}"
+        except OSError:
+            status = f"Could not send: {msg}"
+        self.query_one("#status", Static).update(status)
         self.query_one("#send", Button).disabled = False
         self.query_one("#cancel", Button).disabled = False
 
