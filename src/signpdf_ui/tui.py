@@ -8,14 +8,11 @@ with password prompt. Two menu entries open the config files in $EDITOR.
 
 from __future__ import annotations
 
-import datetime
-import json
 import os
 import shlex
 import shutil
 import subprocess
 import tempfile
-import urllib.request
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import List, Optional
@@ -39,11 +36,8 @@ from textual.widgets import (
     TextArea,
 )
 
-from . import core, paths
+from . import core, feedback, paths
 from .release import __version__ as _version
-
-# Update this once the Flask receiver is deployed.
-FEEDBACK_URL = "https://api.YOURDOMAIN.uberspace.de/feedback/signpdf-ui"
 
 
 # ---------------------------------------------------------------------------
@@ -61,36 +55,6 @@ def _open_in_editor(file_path: Path, editor_override: Optional[str] = None) -> N
         or "xdg-open"
     )
     subprocess.run([*shlex.split(editor), str(file_path)])
-
-
-def _send_feedback(payload: dict) -> None:
-    data = json.dumps(payload).encode()
-    req = urllib.request.Request(
-        FEEDBACK_URL,
-        data=data,
-        headers={"Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        resp.read()
-
-
-def _save_feedback_locally(payload: dict) -> Path:
-    ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    filename = f"signpdf-ui-feedback-message-{ts}.txt"
-    lines = ["message:", payload.get("message", ""), ""]
-    if payload.get("email"):
-        lines += ["email:", payload["email"], ""]
-    if payload.get("version"):
-        lines += [f"app: signpdf-ui v{payload['version']}", ""]
-    content = "\n".join(lines)
-    for directory in (Path.cwd(), Path(tempfile.gettempdir())):
-        try:
-            path = directory / filename
-            path.write_text(content, encoding="utf-8")
-            return path
-        except OSError:
-            continue
-    raise OSError("Could not write feedback to cwd or tmpdir")
 
 
 def _load_config_or_none():
@@ -631,46 +595,36 @@ class FeedbackModal(ModalScreen):
 
     @on(Button.Pressed, "#send")
     def _send(self) -> None:
-        if "YOURDOMAIN" in FEEDBACK_URL:
-            self.query_one("#status", Static).update(
-                "Feedback not configured yet — please open a GitHub issue instead."
-            )
-            return
         message = self.query_one("#message", TextArea).text.strip()
         if not message:
             self.query_one("#status", Static).update("Please enter a message.")
             return
-        payload: dict = {"message": message}
         email = self.query_one("#email", Input).value.strip()
-        if email:
-            payload["email"] = email
-        if self.query_one("#include_version", Checkbox).value:
-            payload["app"] = "signpdf-ui"
-            payload["version"] = _version
+        version = _version if self.query_one("#include_version", Checkbox).value else ""
         self.query_one("#send", Button).disabled = True
         self.query_one("#cancel", Button).disabled = True
         self.query_one("#status", Static).update("Sending…")
-        self._post(payload)
+        self._post(message, email, version)
 
     @work(thread=True)
-    def _post(self, payload: dict) -> None:
-        try:
-            _send_feedback(payload)
+    def _post(self, message: str, email: str, version: str) -> None:
+        success = feedback.send_feedback(message, email=email, version=version)
+        if success:
             self.app.call_from_thread(self._on_success)
-        except Exception as exc:
-            self.app.call_from_thread(self._on_error, payload, str(exc))
+        else:
+            self.app.call_from_thread(self._on_error, message, email, version)
 
     def _on_success(self) -> None:
         self.query_one("#status", Static).update("Sent — thank you!")
         self.query_one("#cancel", Button).disabled = False
         self.query_one("#cancel", Button).label = "Close"
 
-    def _on_error(self, payload: dict, msg: str) -> None:
+    def _on_error(self, message: str, email: str, version: str) -> None:
         try:
-            saved = _save_feedback_locally(payload)
-            status = f"Could not send: {msg}\nSaved locally: {saved}"
+            saved = feedback.save_feedback_locally(message, email=email, version=version)
+            status = f"Could not send. Saved locally: {saved}"
         except OSError:
-            status = f"Could not send: {msg}"
+            status = "Could not send feedback."
         self.query_one("#status", Static).update(status)
         self.query_one("#send", Button).disabled = False
         self.query_one("#cancel", Button).disabled = False

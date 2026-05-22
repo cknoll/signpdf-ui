@@ -223,12 +223,9 @@ class TestFeedbackModal(unittest.IsolatedAsyncioTestCase):
             self.assertFalse(send_btn.disabled, "Send must be enabled after consent is given")
 
     async def test_feedback_sent_only_with_consent(self):
-        """_send_feedback is called when consent is given, not before."""
+        """send_feedback is called when consent is given, not before."""
         app = SignPdfUiApp()
-        with (
-            patch("signpdf_ui.tui.FEEDBACK_URL", "https://test.example.com/feedback/signpdf-ui"),
-            patch("signpdf_ui.tui._send_feedback") as mock_send,
-        ):
+        with patch("signpdf_ui.feedback.send_feedback", return_value=True) as mock_send:
             async with app.run_test(size=(120, 40)) as pilot:
                 await app.push_screen(FeedbackModal())
                 await pilot.pause()
@@ -237,7 +234,7 @@ class TestFeedbackModal(unittest.IsolatedAsyncioTestCase):
                 app.screen.query_one("#message", TextArea).load_text("Test feedback message")
                 await pilot.pause()
 
-                # Send is disabled — clicking must not call _send_feedback
+                # Send is disabled — clicking must not call send_feedback
                 await pilot.click("#send")
                 await pilot.pause()
                 mock_send.assert_not_called()
@@ -250,8 +247,8 @@ class TestFeedbackModal(unittest.IsolatedAsyncioTestCase):
                 await pilot.pause()  # wait for worker thread callback
 
                 mock_send.assert_called_once()
-                payload = mock_send.call_args[0][0]
-                self.assertEqual(payload["message"], "Test feedback message")
+                args, kwargs = mock_send.call_args
+                self.assertEqual(args[0], "Test feedback message")
 
 
 if __name__ == "__main__":
