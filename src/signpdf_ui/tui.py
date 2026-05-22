@@ -608,10 +608,13 @@ class FeedbackModal(ModalScreen):
 
     @work(thread=True)
     def _post(self, message: str, email: str, version: str) -> None:
-        success = feedback.send_feedback(message, email=email, version=version)
-        if success:
-            self.app.call_from_thread(self._on_success)
-        else:
+        try:
+            success = feedback.send_feedback(message, email=email, version=version)
+            if success:
+                self.app.call_from_thread(self._on_success)
+            else:
+                self.app.call_from_thread(self._on_error, message, email, version)
+        except Exception:
             self.app.call_from_thread(self._on_error, message, email, version)
 
     def _on_success(self) -> None:
