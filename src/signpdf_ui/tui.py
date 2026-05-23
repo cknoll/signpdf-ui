@@ -544,6 +544,8 @@ class FeedbackModal(ModalScreen):
 
     BINDINGS = [
         *_LR,
+        Binding("escape", "app.pop_screen", show=False),
+        Binding("alt+left", "app.pop_screen", show=False),
         Binding("ctrl+q", "request_quit", show=False),
     ]
 
@@ -565,7 +567,7 @@ class FeedbackModal(ModalScreen):
             Checkbox("I agree to storage and processing of the above data.", value=False, id="consent"),
             Horizontal(
                 Button("Send", id="send", variant="primary", disabled=True),
-                Button("Cancel", id="cancel"),
+                Button("Back (Alt+←)", id="back"),
             ),
             Static("", id="status"),
             id="modal_inner",
@@ -589,8 +591,8 @@ class FeedbackModal(ModalScreen):
     def _consent_changed(self, event: Checkbox.Changed) -> None:
         self.query_one("#send", Button).disabled = not event.value
 
-    @on(Button.Pressed, "#cancel")
-    def _cancel(self) -> None:
+    @on(Button.Pressed, "#back")
+    def _back(self) -> None:
         self.dismiss()
 
     @on(Button.Pressed, "#send")
@@ -602,7 +604,7 @@ class FeedbackModal(ModalScreen):
         email = self.query_one("#email", Input).value.strip()
         version = _version if self.query_one("#include_version", Checkbox).value else ""
         self.query_one("#send", Button).disabled = True
-        self.query_one("#cancel", Button).disabled = True
+        self.query_one("#back", Button).disabled = True
         self.query_one("#status", Static).update("Sending…")
         self._post(message, email, version)
 
@@ -622,8 +624,7 @@ class FeedbackModal(ModalScreen):
         send.label = "✓ Sent"
         send.variant = "success"
         self.query_one("#status", Static).update("")
-        self.query_one("#cancel", Button).disabled = False
-        self.query_one("#cancel", Button).label = "Close"
+        self.query_one("#back", Button).disabled = False
 
     def _on_error(self, message: str, email: str, version: str) -> None:
         send = self.query_one("#send", Button)
@@ -637,8 +638,7 @@ class FeedbackModal(ModalScreen):
             send.variant = "error"
             send.disabled = False
             self.query_one("#status", Static).update("Could not send or save feedback.")
-        self.query_one("#cancel", Button).disabled = False
-        self.query_one("#cancel", Button).label = "Close"
+        self.query_one("#back", Button).disabled = False
 
 
 class WrongPasswordModal(ModalScreen):
