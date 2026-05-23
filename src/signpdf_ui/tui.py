@@ -623,7 +623,7 @@ class FeedbackModal(ModalScreen):
         send = self.query_one("#send", Button)
         send.label = "✓ Sent"
         send.variant = "success"
-        self.query_one("#status", Static).update("")
+        self.query_one("#status", Static).update("Sending… done.")
         self.query_one("#back", Button).disabled = False
 
     def _on_error(self, message: str, email: str, version: str) -> None:
@@ -632,12 +632,12 @@ class FeedbackModal(ModalScreen):
             saved = feedback.save_feedback_locally(message, email=email, version=version)
             send.label = "✓ Saved locally"
             send.variant = "warning"
-            self.query_one("#status", Static).update(str(saved))
+            self.query_one("#status", Static).update(f"Sending… failed. Saved to: {saved}")
         except OSError:
             send.label = "✗ Send failed"
             send.variant = "error"
             send.disabled = False
-            self.query_one("#status", Static).update("Could not send or save feedback.")
+            self.query_one("#status", Static).update("Sending… failed.")
         self.query_one("#back", Button).disabled = False
 
 
