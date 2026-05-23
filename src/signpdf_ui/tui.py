@@ -618,19 +618,27 @@ class FeedbackModal(ModalScreen):
             self.app.call_from_thread(self._on_error, message, email, version)
 
     def _on_success(self) -> None:
-        self.query_one("#status", Static).update("Sent — thank you!")
+        send = self.query_one("#send", Button)
+        send.label = "✓ Sent"
+        send.variant = "success"
+        self.query_one("#status", Static).update("")
         self.query_one("#cancel", Button).disabled = False
         self.query_one("#cancel", Button).label = "Close"
 
     def _on_error(self, message: str, email: str, version: str) -> None:
+        send = self.query_one("#send", Button)
         try:
             saved = feedback.save_feedback_locally(message, email=email, version=version)
-            status = f"Could not send. Saved locally: {saved}"
+            send.label = "✓ Saved locally"
+            send.variant = "warning"
+            self.query_one("#status", Static).update(str(saved))
         except OSError:
-            status = "Could not send feedback."
-        self.query_one("#status", Static).update(status)
-        self.query_one("#send", Button).disabled = False
+            send.label = "✗ Send failed"
+            send.variant = "error"
+            send.disabled = False
+            self.query_one("#status", Static).update("Could not send or save feedback.")
         self.query_one("#cancel", Button).disabled = False
+        self.query_one("#cancel", Button).label = "Close"
 
 
 class WrongPasswordModal(ModalScreen):
