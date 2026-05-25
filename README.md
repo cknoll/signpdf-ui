@@ -24,8 +24,6 @@ signpdf-ui --init
 This copies the bundled configuration templates (`signpdf-ui.yml`, `pyhanko.yml`, `watermark.png`) into your user config directory — typically `~/.config/signpdf-ui/` on Linux. Use `--init --force` to overwrite existing files.
 
 
-After this initialization you can run
-
 ## Getting started
 Run
 
@@ -34,8 +32,7 @@ signpdf-ui --demo
 ```
 
 to copy bundled demo PDFs to `/tmp/pdfsign-ui-demo-<timestamp>/` and print usage instructions.
-You can play around with those files and the bundled p12-certificate (password: `KXzolC-test-pw-s9Ckp7oZ`).
-I was created for this demonstration purpose only.
+You can play around with those files and the bundled p12-certificate (password: `KXzolC-test-pw-s9Ckp7oZ`) — created for this demonstration purpose only.
 
 
 ## Customization
