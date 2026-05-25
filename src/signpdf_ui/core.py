@@ -154,10 +154,12 @@ def build_sign_command(
     Returns a list of strings suitable for subprocess.run without shell=True.
     """
 
+    # Resolve all paths to absolute so pyhanko finds them regardless of cwd
+    # (run_sign_command changes cwd to the config directory).
     return [
         "pyhanko",
         "--config",
-        str(pyhanko_config),
+        str(pyhanko_config.resolve()),
         "sign",
         "addsig",
         "--no-strict-syntax",
@@ -166,9 +168,9 @@ def build_sign_command(
         "--field",
         field,
         "pkcs12",
-        str(input_file),
-        str(output_file),
-        str(cert_path),
+        str(input_file.resolve()),
+        str(output_file.resolve()),
+        str(cert_path.resolve()),
     ]
 
 

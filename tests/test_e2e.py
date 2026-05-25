@@ -96,6 +96,55 @@ class TestSignE2E(unittest.TestCase):
         self.assertTrue(out.is_file())
         self.assertGreater(out.stat().st_size, 0)
 
+    def test_030_wrong_password_not_file_not_found(self):
+        """Wrong password must yield a password error, not 'file does not exist'.
+
+        Reproduces the bug where the TUI passed relative paths to
+        build_sign_command; when run_sign_command switched cwd to the config
+        directory, pyhanko could not find the PDF and reported a misleading
+        'INFILE does not exist' error instead of a password error.
+        """
+        input_pdf = FIXTURES / "demo-form-with-sign-fields.pdf"
+        work_input = self._tmp / input_pdf.name
+        shutil.copy2(input_pdf, work_input)
+        out = core.output_path_for(work_input)
+
+        # Simulate the TUI: build the command with relative paths while cwd
+        # is self._tmp, then run it (which switches cwd to the config dir).
+        old_cwd = Path.cwd()
+        try:
+            os.chdir(self._tmp)
+            cmd = core.build_sign_command(
+                input_file=Path(work_input.name),   # relative path
+                output_file=Path(out.name),          # relative path
+                field="Person3",
+                cert_path=TEST_CERT,
+                pyhanko_config=self._cfg.pyhanko_config,
+                style_name=self._cfg.style_name,
+            )
+        finally:
+            os.chdir(old_cwd)
+
+        proc = core.run_sign_command(
+            cmd,
+            pyhanko_config=self._cfg.pyhanko_config,
+            stdin="wrong-password\n",
+            capture_output=True,
+            start_new_session=True,
+        )
+        self.assertNotEqual(proc.returncode, 0, "expected non-zero exit for wrong password")
+        combined = proc.stdout + proc.stderr
+        self.assertNotIn(
+            "does not exist",
+            combined,
+            f"'file not found' error suggests paths are not absolute.\n"
+            f"stdout: {proc.stdout}\nstderr: {proc.stderr}",
+        )
+        self.assertTrue(
+            core.is_wrong_password_error(proc.stderr),
+            f"expected a password error.\nstdout: {proc.stdout}\nstderr: {proc.stderr}",
+        )
+
 
 @unittest.skipUnless(_pyhanko_available_or_fail(), "pyhanko not on PATH")
 class TestListFieldsE2E(unittest.TestCase):

@@ -36,8 +36,30 @@ class TestBuildSignCommand(unittest.TestCase):
         self.assertIn("--field", cmd)
         self.assertIn("1/189,578,356,615/X1", cmd)
         self.assertIn("pkcs12", cmd)
-        # input, output, cert come last in that order
-        self.assertEqual(cmd[-3:], ["in.pdf", "in_signed.pdf", "cert.p12"])
+        # input, output, cert come last in that order (absolute paths)
+        self.assertTrue(cmd[-3].endswith("in.pdf"))
+        self.assertTrue(cmd[-2].endswith("in_signed.pdf"))
+        self.assertTrue(cmd[-1].endswith("cert.p12"))
+
+    def test_030_relative_paths_are_made_absolute(self):
+        """build_sign_command must resolve all paths to absolute.
+
+        run_sign_command changes cwd to the config directory, so any relative
+        path in the command would be resolved against the wrong directory.
+        """
+        cmd = core.build_sign_command(
+            input_file=Path("in.pdf"),
+            output_file=Path("out.pdf"),
+            field="F1",
+            cert_path=Path("cert.p12"),
+            pyhanko_config=Path("pyhanko.yml"),
+            style_name="s",
+        )
+        config_idx = cmd.index("--config")
+        self.assertTrue(Path(cmd[config_idx + 1]).is_absolute(), "config path must be absolute")
+        self.assertTrue(Path(cmd[-3]).is_absolute(), "input path must be absolute")
+        self.assertTrue(Path(cmd[-2]).is_absolute(), "output path must be absolute")
+        self.assertTrue(Path(cmd[-1]).is_absolute(), "cert path must be absolute")
 
     def test_020_config_flag_present(self):
         cmd = core.build_sign_command(
