@@ -355,6 +355,7 @@ class PickFieldScreen(Screen):
     def _back(self) -> None:
         self.app.pop_screen()
 
+    @on(ListView.Selected, "#fields")
     @on(Button.Pressed, "#use")
     def _use(self) -> None:
         lv: ListView = self.query_one("#fields", ListView)

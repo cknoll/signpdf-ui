@@ -21,6 +21,8 @@ from signpdf_ui import core, paths
 from signpdf_ui.tui import (
     ConfirmScreen,
     FeedbackModal,
+    PickCertScreen,
+    PickFieldScreen,
     PickGeometryScreen,
     SelectFilesScreen,
     SelectModeScreen,
@@ -129,6 +131,36 @@ class TestSelectFilesScreenResume(unittest.IsolatedAsyncioTestCase):
                 app.screen,
                 SelectModeScreen,
                 "Enter on SelectFilesScreen after returning from step 2 must push SelectModeScreen",
+            )
+
+
+class TestPickFieldScreenEnter(unittest.IsolatedAsyncioTestCase):
+    """Enter on a list item in PickFieldScreen must advance to PickCertScreen."""
+
+    async def test_enter_on_field_item_advances(self):
+        fixture = paths.fixture_path("demo-form-with-sign-fields.pdf")
+        app = SignPdfUiApp()
+        app.wizard.files = [fixture]
+        async with app.run_test(size=(120, 40)) as pilot:
+            await app.push_screen(PickFieldScreen())
+            await pilot.pause()
+            await pilot.pause()
+
+            lv = app.query_one("#fields", ListView)
+            self.assertGreater(
+                len(list(lv.children)), 0, "Field list must be populated from the fixture PDF"
+            )
+
+            lv.focus()
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            await pilot.pause()
+
+            self.assertIsInstance(
+                app.screen,
+                PickCertScreen,
+                "Enter on a field list item must push PickCertScreen",
             )
 
 
