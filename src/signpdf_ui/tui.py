@@ -348,6 +348,8 @@ class PickFieldScreen(Screen):
         try:
             for name in core.list_fields(first):
                 lv.append(ListItem(Label(name)))
+            if lv.children:
+                lv.index = 0
         except Exception as exc:  # noqa: BLE001
             hint.update(f"Could not list fields in {first}: {exc}")
 
