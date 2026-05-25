@@ -2,3 +2,5 @@ textual>=0.81,<1
 pyyaml
 platformdirs
 pyhanko
+pyhanko-cli
+Pillow
