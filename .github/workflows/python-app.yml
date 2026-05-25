@@ -43,6 +43,9 @@ jobs:
         uv pip install --system -r requirements.txt
         uv pip install --system -e .
 
+    - name: Verify pyhanko CLI is accessible
+      run: pyhanko --version
+
     - name: run all tests
       run: |
         pytest

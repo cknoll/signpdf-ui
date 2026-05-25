@@ -10,24 +10,24 @@ build-backend = "setuptools.build_meta"
 
 
 name = "signpdf-ui"
-description = "..."
+description = "Interactive terminal UI (TUI) for signing PDF documents using pyhanko — no command-line flags to memorize."
 # authors mail-domain is: posteo.de
 authors=[{name = "Carsten Knoll", email = "firstname.lastname@domain.org"}]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = { text = "GNU General Public License v3 (GPLv3)" }
 
 dynamic = ["dependencies", "version"]
 
 classifiers=[
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
     "Programming Language :: Python :: 3",
 ]
 
 
 [project.urls]
-# Homepage = "..."
+Homepage = "https://github.com/cknoll/signpdf-ui"
 
 [project.scripts]
 signpdf-ui = "signpdf_ui.cli:main"

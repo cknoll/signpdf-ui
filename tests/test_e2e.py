@@ -6,6 +6,7 @@ Skipped if pyhanko is not on PATH so the test suite stays runnable in minimal
 environments.
 """
 
+import os
 import shutil
 import subprocess
 import tempfile
@@ -21,12 +22,22 @@ TEST_CERT = FIXTURES / "test_identity.p12"
 # alongside this self-signed cert; not used anywhere else).
 TEST_CERT_PASSWORD = "KXzolC-test-pw-s9Ckp7oZ"
 
+_IN_CI = os.getenv("CI") == "true"
+
 
 def _have_pyhanko() -> bool:
     return shutil.which("pyhanko") is not None
 
 
-@unittest.skipUnless(_have_pyhanko(), "pyhanko not on PATH")
+def _pyhanko_available_or_fail():
+    if _have_pyhanko():
+        return True
+    if _IN_CI:
+        raise AssertionError("pyhanko not on PATH — required in CI")
+    return False
+
+
+@unittest.skipUnless(_pyhanko_available_or_fail(), "pyhanko not on PATH")
 class TestSignE2E(unittest.TestCase):
     """Drives the same code path the TUI uses, end to end."""
 
@@ -86,7 +97,7 @@ class TestSignE2E(unittest.TestCase):
         self.assertGreater(out.stat().st_size, 0)
 
 
-@unittest.skipUnless(_have_pyhanko(), "pyhanko not on PATH")
+@unittest.skipUnless(_pyhanko_available_or_fail(), "pyhanko not on PATH")
 class TestListFieldsE2E(unittest.TestCase):
     def test_010_lists_prepared_fields(self):
         fields = core.list_fields(FIXTURES / "demo-form-with-sign-fields.pdf")

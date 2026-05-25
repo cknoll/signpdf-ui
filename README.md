@@ -40,10 +40,10 @@ I was created for this demonstration purpose only.
 
 ## Customization
 
-To make pdfsign-ui actually useful you have to customize it:
+To make signpdf-ui actually useful you have to customize it:
 
-- 1. `pdfsign-ui` → button "Edit config for user interface" → insert the path for your p12 certificate at `default_cert: ...`.
-- 2. `pdfsign-ui` → button "Edit config for backend (pyhanko)" → adapt the stamp text to your needs.
+- 1. `signpdf-ui` → button "Edit config for user interface" → insert the path for your p12 certificate at `default_cert: ...`.
+- 2. `signpdf-ui` → button "Edit config for backend (pyhanko)" → adapt the stamp text to your needs.
 - 3. (optional) Adapt the png watermark image at `$HOME/.config/signpdf-ui/watermark.png` or set a different one. This has great impact on the visual appearance of your signature.
 
 Test your setup with the demo PDF-files.
@@ -71,7 +71,7 @@ Main menu entries:
 
 - **Sign PDF(s)** — four-step wizard: file/pattern → mode (existing signature field or custom area) → field/rect → certificate → confirm & sign. The confirmation screen shows the exact `pyhanko sign addsig ...` command(s) inline, with a **Copy to clipboard** button.
 - **Edit config for user interface** / **Edit config for backend (pyhanko)** — opens the respective YAML file in `$VISUAL` / `$EDITOR` (or `xdg-open`).
-- **Send feedback** — not yet implemented.
+- **Send feedback** — opens a dialog to send a short message (and optional e-mail address) to the developer.
 - **Quit (Ctrl+q)** — exits (also available from any screen).
 
 ### Defining the signature area visually with Okular
