@@ -43,6 +43,11 @@ jobs:
         uv pip install --system -r requirements.txt
         uv pip install --system -e .
 
+    - name: Add Python scripts dir to PATH
+      # uv --system installs scripts into the setup-python Python's bin dir,
+      # which is not automatically on PATH in GitHub Actions.
+      run: echo "$pythonLocation/bin" >> $GITHUB_PATH
+
     - name: Verify pyhanko CLI is accessible
       run: pyhanko --version
 
